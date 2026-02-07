@@ -67,6 +67,8 @@ export function useGameFetcher(gameId: string, gameObject: UnifiedGame | null) {
 
   // Trigger fetch when ID or Source changes
   useEffect(() => {
+    setLocalTrophies([]);
+    setTrophyGroups([]);
     fetchData();
   }, [gameId, gameObject?.source]);
 

@@ -23,6 +23,9 @@ export type TrophyContextType = {
   setTrophies: (data: any) => void;
   refreshAllTrophies: () => Promise<void>;
   refreshSingleGame: (npwr: string) => Promise<void>;
+  // New cache
+  lastUpdated: number | null;
+  isLoadingCache: boolean;
   accountId: string | null;
   setAccountId: (id: string | null) => void;
   accessToken: string | null;

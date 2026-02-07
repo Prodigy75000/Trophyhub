@@ -1,4 +1,3 @@
-// components/trophies/TrophyActionSheet.styles.ts
 import { StyleSheet } from "react-native";
 
 export const styles = StyleSheet.create({
@@ -11,8 +10,9 @@ export const styles = StyleSheet.create({
     backgroundColor: "#151b2b",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    // 🟢 FIX 1: More breathing room at the edges
+    paddingHorizontal: 24,
+    paddingTop: 24,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.1)",
   },
@@ -22,21 +22,24 @@ export const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 2,
     alignSelf: "center",
-    marginBottom: 20,
+    marginBottom: 24, // Increased spacing from handle
   },
   headerRow: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
+    // 🟢 FIX 2: Align items to 'flex-start' so text doesn't center-align
+    // if the description is long compared to the icon
+    alignItems: "flex-start",
+    marginBottom: 32, // Push actions further down
   },
   largeIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 12,
+    // 🟢 FIX 3: Much larger icon (was 72)
+    width: 100,
+    height: 100,
+    borderRadius: 16,
     borderWidth: 1,
     overflow: "hidden",
     backgroundColor: "#000",
-    marginRight: 16,
+    marginRight: 20, // More gap between icon and text
     justifyContent: "center",
     alignItems: "center",
   },
@@ -47,29 +50,31 @@ export const styles = StyleSheet.create({
   headerTextCol: {
     flex: 1,
     justifyContent: "center",
+    paddingTop: 4, // Slight optical alignment with the top of the big icon
   },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 8,
   },
   rarityIcon: {
-    width: 28,
-    height: 28,
-    marginRight: 6,
+    width: 24,
+    height: 24,
+    marginRight: 8,
   },
   trophyTitle: {
     color: "white",
-    fontSize: 18,
+    // 🟢 FIX 4: Larger, bolder title
+    fontSize: 20,
     fontWeight: "800",
     letterSpacing: 0.5,
-    flex: 1, // Ensure text wraps correctly next to icon
+    flex: 1,
   },
   gameTitle: {
     color: "#888",
     fontSize: 13,
     fontWeight: "600",
-    marginBottom: 4,
+    marginBottom: 6,
     textTransform: "uppercase",
   },
   trophyDesc: {
@@ -77,6 +82,7 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontStyle: "italic",
     lineHeight: 18,
+    marginTop: 4,
   },
   actionsGrid: {
     flexDirection: "row",
@@ -104,5 +110,12 @@ export const styles = StyleSheet.create({
     color: "#ddd",
     fontSize: 13,
     fontWeight: "600",
+  },
+  description: {
+    color: "#a0a0b0",
+    fontSize: 15, // Readable size
+    lineHeight: 20,
+    marginBottom: 8,
+    marginTop: 0,
   },
 });

@@ -23,6 +23,7 @@ type ActionSheetProps = {
   trophyType: TrophyType;
   trophyIconUrl?: string;
   trophyDetail?: string;
+  description: string;
 };
 
 const TROPHY_ICONS: Record<string, any> = {
@@ -77,6 +78,7 @@ function TrophyActionSheet({
   trophyType,
   trophyIconUrl,
   trophyDetail,
+  description,
 }: ActionSheetProps) {
   const insets = useSafeAreaInsets();
   const [activeGuide, setActiveGuide] = useState<{
@@ -141,14 +143,18 @@ function TrophyActionSheet({
                     style={styles.rarityIcon}
                     resizeMode="contain"
                   />
+                  {/* 1. Title Row (Icon + Name) */}
                   <Text style={styles.trophyTitle} numberOfLines={2}>
                     {trophyName}
                   </Text>
                 </View>
-
+                {/* 🟢 2. MOVED: Description (Sits below title now) */}
+                <Text style={styles.description}>{description}</Text>
+                {/* 3. Game Title */}
                 <Text style={styles.gameTitle} numberOfLines={1}>
                   {gameName}
                 </Text>
+                {/* 4. Extra Details (Optional) */}
                 {trophyDetail ? (
                   <Text style={styles.trophyDesc} numberOfLines={2}>
                     {trophyDetail}

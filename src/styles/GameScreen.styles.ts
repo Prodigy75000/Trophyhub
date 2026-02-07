@@ -14,8 +14,8 @@ export const styles = StyleSheet.create({
     backgroundColor: "#000",
   },
   skeletonContainer: {
-    paddingTop: 20,
-    paddingHorizontal: 16,
+    paddingTop: 0,
+    paddingHorizontal: 0,
   },
   listContent: {
     paddingBottom: 40,

@@ -1,6 +1,5 @@
 // hooks/game-details/useGameDetails.ts
 import { useMemo } from "react";
-// ⚠️ Ensure this path matches where your JSON is located
 import masterGamesRaw from "../../../data/master_games.json";
 import { useTrophy } from "../../../providers/TrophyContext";
 import { UnifiedGame } from "./types";
@@ -14,7 +13,7 @@ export function useGameDetails(
 ) {
   const { trophies, xboxTitles } = useTrophy();
 
-  // 1. RESOLVE GAME OBJECT (Priority: PSN -> Xbox -> Master)
+  // 1. RESOLVE GAME OBJECT
   const gameObject = useMemo((): UnifiedGame | null => {
     if (!id) return null;
 
@@ -47,19 +46,8 @@ export function useGameDetails(
         trophyList: [],
         progress: xboxGame.achievement.progressPercentage,
         originalXbox: xboxGame,
-        // Map Gamerscore to generic 'counts' if needed for the header
-        definedTrophies: {
-          bronze: 0,
-          silver: 0,
-          gold: 0,
-          platinum: 0,
-        },
-        earnedTrophies: {
-          bronze: 0,
-          silver: 0,
-          gold: 0,
-          platinum: 0,
-        },
+        definedTrophies: { bronze: 0, silver: 0, gold: 0, platinum: 0 },
+        earnedTrophies: { bronze: 0, silver: 0, gold: 0, platinum: 0 },
       };
     }
 
@@ -72,15 +60,27 @@ export function useGameDetails(
     });
 
     if (master) {
+      // 🟢 FIX: Map JSON trophies to App format so they appear!
+      const mappedTrophies = (master.trophies || []).map((t: any) => ({
+        trophyId: t.id,
+        trophyName: t.name,
+        trophyDetail: t.detail,
+        trophyIconUrl: t.iconUrl,
+        trophyType: t.type,
+        trophyEarnedRate: t.rarity || "0.0",
+        earned: false,
+      }));
+
       return {
         source: "MASTER",
         id: id,
         trophyTitleName: master.displayName,
         trophyTitlePlatform: "Unknown",
         trophyTitleIconUrl: master.iconUrl,
-        trophyList: [],
+        trophyList: mappedTrophies, // 🟢 Pass the mapped list
         masterData: master,
         progress: 0,
+        definedTrophies: master.stats || { bronze: 0, silver: 0, gold: 0, platinum: 0 },
       };
     }
     return null;
@@ -90,23 +90,20 @@ export function useGameDetails(
   const { localTrophies, trophyGroups, isInitialLoading, refreshing, onRefresh } =
     useGameFetcher(id, gameObject);
 
-  // 3. MERGE DATA (Prefer fresh fetch over context cache)
+  // 3. MERGE DATA
   const activeTrophies =
     localTrophies.length > 0 ? localTrophies : gameObject?.trophyList || [];
 
   // 4. PROCESS & SORT
   const processedTrophies = useMemo(() => {
     let list = [...activeTrophies];
-
     if (searchText) {
       const lower = searchText.toLowerCase();
       list = list.filter((t) => t.trophyName.toLowerCase().includes(lower));
     }
-
     list.sort((a, b) => {
       let valA, valB;
       const dir = sortDirection === "ASC" ? 1 : -1;
-
       if (sortMode === "RARITY") {
         valA = parseFloat(a.trophyEarnedRate ?? "100");
         valB = parseFloat(b.trophyEarnedRate ?? "100");
@@ -120,7 +117,6 @@ export function useGameDetails(
       }
       return (valA - valB) * dir;
     });
-
     return list;
   }, [activeTrophies, searchText, sortMode, sortDirection]);
 
@@ -128,15 +124,19 @@ export function useGameDetails(
   const groupedData = useMemo(() => {
     if (!trophyGroups || trophyGroups.length === 0) return null;
 
-    return trophyGroups
+    const result = trophyGroups
       .map((group) => {
+        const ids = group.trophyIds || [];
+        // Robust ID Matching
         const groupTrophies = processedTrophies.filter((t) =>
-          group.trophyIds.includes(t.trophyId)
+          ids.some((id: any) => String(id) === String(t.trophyId))
         );
         if (groupTrophies.length === 0) return null;
         return { ...group, trophies: groupTrophies };
       })
       .filter(Boolean);
+
+    return result.length > 0 ? result : null;
   }, [trophyGroups, processedTrophies]);
 
   // 6. JUST EARNED SET

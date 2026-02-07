@@ -97,6 +97,15 @@ export default function GameScreen() {
 
   // --- EFFECTS ---
   useEffect(() => {
+    console.log(`🎮 GameScreen Mounted. ID: ${gameId}`);
+    if (game) {
+      console.log(`   - Found in Context: ${game.trophyTitleName}`);
+      console.log(`   - Current Trophy Count: ${processedTrophies.length}`);
+    } else {
+      console.log("   - Game NOT found in context (Loading...)");
+    }
+  }, [gameId, game, processedTrophies.length]);
+  useEffect(() => {
     scrollY.setValue(0);
     setCollapsedGroups(new Set());
   }, [gameId, scrollY]); // 🟢 FIXED: Added scrollY dependency
@@ -238,6 +247,7 @@ export default function GameScreen() {
         trophyName={selectedTrophy?.name ?? ""}
         trophyType={selectedTrophy?.type ?? "bronze"}
         trophyIconUrl={selectedTrophy?.iconUrl}
+        description={selectedTrophy?.description ?? ""}
       />
     </View>
   );
@@ -265,5 +275,6 @@ const mapTrophyToProps = (
       name: trophy.trophyName,
       type: normalizeTrophyType(trophy.trophyType),
       iconUrl: trophy.trophyIconUrl,
+      description: trophy.trophyDetail,
     }),
 });

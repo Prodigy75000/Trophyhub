@@ -1,31 +1,28 @@
-// server.js
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const fs = require("fs"); // 🟢 ADD THIS at the top with other requires
-console.log(
-  "🔑 LOADED NPSSO:",
-  process.env.NPSSO ? process.env.NPSSO.substring(0, 5) + "..." : "UNDEFINED"
-);
-const { Buffer } = require("buffer"); // 🟢 ADD THIS LINE
+const fs = require("fs");
+const { Buffer } = require("buffer");
+
+// 🟢 NEW IMPORTS (Refactor)
+const { fetchPSN } = require("./src/utils/psnClient");
+const trophyController = require("./src/controllers/trophyController");
+
+// PSN Library Imports
 const {
-  exchangeCodeForAccessToken,
-  exchangeNpssoForCode, // Optional
-  exchangeRefreshTokenForAccessToken, // 🟢 ADD THIS for the next step!
+  exchangeAccessCodeForAuthTokens,
+  exchangeNpssoForAccessCode,
+  exchangeRefreshTokenForAuthTokens,
 } = require("psn-api");
 
+// Config
 dotenv.config();
-
-const {
-  getServiceAuth,
-  fetchWithAutoRefresh, // Still used for generic bootstrap calls
-  fetchWithFallback, // 🟢 Ensure this is imported
-} = require("./config/psn");
-const { mergeTrophies, enrichTitlesWithArtwork } = require("./src/utils/trophyHelpers");
-// 🟢 XBOX AUTHENTICATION CONSTANTS
-const AZURE_CLIENT_ID = "5e278654-b281-411b-85f4-eb7fb056e5ba"; // Same ID as frontend
+const { getServiceAuth } = require("./config/psn");
+const AZURE_CLIENT_ID = "5e278654-b281-411b-85f4-eb7fb056e5ba";
 
 const app = express();
+
+// Middleware
 app.use(
   cors({
     origin: "*",
@@ -35,67 +32,34 @@ app.use(
 );
 app.use(express.json());
 
-// 🟢 ADD THIS BLOCK (The Doorbell)
+// Logger
 app.use((req, res, next) => {
   console.log(`🔔 SERVER HIT: ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// ---------------------------------------------------------------------------
-// MIDDLEWARE
-// ---------------------------------------------------------------------------
-
+// Auth Guard
 function requireBearer(req, res, next) {
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) {
-    // 🟢 Save the token to the request object so routes can use it
     req.accessToken = authHeader.split(" ")[1];
   }
-  // We allow proceeding even without a token (for Guest/Bootstrap mode),
-  // but individual routes can decide to enforce it.
   next();
-}
-
-// 🟢 HELPER: Decides whether to use User Token or Server Bootstrap
-// 🟢 UPDATED HELPER: Ties psn.js logic into User requests
-async function fetchPSN(url, userToken) {
-  if (userToken) {
-    console.log("🔐 Using User Token...");
-
-    // Construct headers manually for the user
-    const headers = {
-      Authorization: `Bearer ${userToken}`,
-      "User-Agent": "Mozilla/5.0",
-      "Accept-Language": "en-US",
-    };
-
-    // 🟢 USE psn.js HELPER: This ensures PS3/Vita games work for users too!
-    return await fetchWithFallback(url, headers);
-  } else {
-    // Fallback to Server Bootstrap (uses psn.js internal token)
-    console.log("🌍 Using Server Bootstrap Token...");
-    return await fetchWithAutoRefresh(url);
-  }
 }
 
 // ---------------------------------------------------------------------------
 // ROUTES
 // ---------------------------------------------------------------------------
 
-// 🟢 ROUTE: FETCH XBOX TITLES (AND DUMP TO FILE)
+// 🟢 1. XBOX ROUTES (Kept As-Is)
 app.post("/xbox/titles", async (req, res) => {
   const { xuid, xstsToken, userHash } = req.body;
-
   if (!xuid || !xstsToken || !userHash) {
     return res.status(400).json({ error: "Missing Xbox credentials" });
   }
-
   try {
     console.log(`⏳ Fetching Xbox Games for ${xuid}...`);
-
-    // Modern TitleHub API (Includes Xbox One, Series X|S, and some 360)
     const url = `https://titlehub.xboxlive.com/users/xuid(${xuid})/titles/titlehistory/decoration/scid,image,detail`;
-
     const response = await fetch(url, {
       headers: {
         "x-xbl-contract-version": "2",
@@ -103,20 +67,8 @@ app.post("/xbox/titles", async (req, res) => {
         "Accept-Language": "en-US",
       },
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("❌ Xbox TitleHub Error:", errText);
-      throw new Error("Failed to fetch Xbox Titles");
-    }
-
+    if (!response.ok) throw new Error("Failed to fetch Xbox Titles");
     const data = await response.json();
-
-    // 🟢 DUMP TO FILE (For Inspection)
-    const dumpPath = "./xbox_dump.json";
-    fs.writeFileSync(dumpPath, JSON.stringify(data, null, 2));
-    console.log(`📁 Data dumped to ${dumpPath}`);
-
     res.json(data);
   } catch (err) {
     console.error("❌ Xbox Fetch Error:", err.message);
@@ -124,24 +76,10 @@ app.post("/xbox/titles", async (req, res) => {
   }
 });
 
-// 🟢 ROUTE: EXCHANGE OAUTH CODE FOR XSTS TOKENS
 app.post("/xbox/exchange", async (req, res) => {
   const { code, redirectUri, codeVerifier } = req.body;
-  // 🟢 DIAGNOSTIC LOG (The Trap)
-  console.log("📦 [Server] Received Payload:");
-  console.log("   - Code Length:", code ? code.length : "MISSING");
-  console.log("   - Redirect URI:", redirectUri);
-  console.log(
-    "   - Verifier:",
-    codeVerifier ? codeVerifier.substring(0, 10) + "..." : "UNDEFINED"
-  );
   try {
-    console.log("🔄 [Xbox] Step 1: Exchanging OAuth Code...");
-
-    // 🟢 FIX: Use Microsoft V2 Endpoint (Matches Frontend)
     const tokenUrl = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
-
-    // 🟢 FIX: Send as x-www-form-urlencoded (Required by V2)
     const params = new URLSearchParams();
     params.append("client_id", AZURE_CLIENT_ID);
     params.append("scope", "XboxLive.Signin offline_access");
@@ -152,78 +90,50 @@ app.post("/xbox/exchange", async (req, res) => {
 
     const tokenRes = await fetch(tokenUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
     });
-
     const tokenData = await tokenRes.json();
-
-    // Debugging Help
-    if (!tokenRes.ok) {
-      console.error("❌ Token Exchange Failed:", JSON.stringify(tokenData, null, 2));
-      throw new Error(tokenData.error_description || "OAuth Exchange Failed");
-    }
+    if (!tokenRes.ok) throw new Error(tokenData.error_description || "OAuth Failed");
 
     const accessToken = tokenData.access_token;
-    console.log("✅ Access Token Acquired!");
 
-    // 2. Exchange Access Token for Xbox Live User Token
-    console.log("🔄 [Xbox] Step 2: Getting User Token...");
+    // Xbox Live User Token
     const xblRes = await fetch("https://user.auth.xboxlive.com/user/authenticate", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         Properties: {
           AuthMethod: "RPS",
           SiteName: "user.auth.xboxlive.com",
-          RpsTicket: `d=${accessToken}`, // The magic format
+          RpsTicket: `d=${accessToken}`,
         },
         RelyingParty: "http://auth.xboxlive.com",
         TokenType: "JWT",
       }),
     });
-
     const xblData = await xblRes.json();
     if (!xblRes.ok) throw new Error("XBL Auth Failed");
-
     const xblToken = xblData.Token;
 
-    // 3. Exchange XBL Token for XSTS Token (The "Real" Key)
-    console.log("🔄 [Xbox] Step 3: Getting XSTS Token...");
+    // XSTS Token
     const xstsRes = await fetch("https://xsts.auth.xboxlive.com/xsts/authorize", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
-        Properties: {
-          SandboxId: "RETAIL",
-          UserTokens: [xblToken],
-        },
+        Properties: { SandboxId: "RETAIL", UserTokens: [xblToken] },
         RelyingParty: "http://xboxlive.com",
         TokenType: "JWT",
       }),
     });
-
     const xstsData = await xstsRes.json();
-    if (xstsData.XErr) {
-      // Common error: User has no Gamertag created yet or is a Child account
-      throw new Error(`XSTS Error: ${xstsData.XErr}`);
-    }
+    if (xstsData.XErr) throw new Error(`XSTS Error: ${xstsData.XErr}`);
     if (!xstsRes.ok) throw new Error("XSTS Auth Failed");
 
-    // 4. Extract Key Info
     const xstsToken = xstsData.Token;
-    const userHash = xstsData.DisplayClaims.xui[0].uhs; // "User Hash String"
+    const userHash = xstsData.DisplayClaims.xui[0].uhs;
 
-    // 5. Fetch Profile (to confirm it worked)
-    console.log("👤 [Xbox] Fetching Gamertag...");
+    // Profile
     const profileRes = await fetch(
       `https://profile.xboxlive.com/users/me/profile/settings?settings=Gamertag,GameDisplayPicRaw`,
       {
@@ -234,25 +144,16 @@ app.post("/xbox/exchange", async (req, res) => {
         },
       }
     );
-
     const profileData = await profileRes.json();
     const userSettings = profileData.profileUsers[0].settings;
-    const gamertag = userSettings.find((s) => s.id === "Gamertag").value;
-    const gamerpic = userSettings.find((s) => s.id === "GameDisplayPicRaw").value;
-    const xuid = profileData.profileUsers[0].id;
 
-    console.log(`✅ [Xbox] Logged in as: ${gamertag}`);
-
-    // Return everything needed for future calls
     res.json({
-      gamertag,
-      gamerpic,
-      xuid,
+      gamertag: userSettings.find((s) => s.id === "Gamertag").value,
+      gamerpic: userSettings.find((s) => s.id === "GameDisplayPicRaw").value,
+      xuid: profileData.profileUsers[0].id,
       xstsToken,
       userHash,
-      // You should store these securely or send back to client
-      accessToken, // Microsoft Access Token (for refreshing later)
-      refreshToken: tokenData.refresh_token,
+      accessToken,
     });
   } catch (err) {
     console.error("❌ Xbox Login Error:", err.message);
@@ -260,102 +161,62 @@ app.post("/xbox/exchange", async (req, res) => {
   }
 });
 
-// BOOTSTRAP ENDPOINT
+// 🟢 2. AUTH ROUTES
 app.get("/api/login", async (req, res) => {
   try {
-    console.log("🌍 Guest Bootstrap initiated...");
-    const auth = await getServiceAuth(); // Uses psn.js to get system token
+    const auth = await getServiceAuth();
     res.json(auth);
   } catch (err) {
-    console.error("❌ Bootstrap Error:", err.message);
     res.status(500).json({ error: "PSN Login Failed", details: err.message });
   }
 });
 
-// 🟢 NEW: REFRESH TOKEN ROUTE
 app.post("/api/auth/refresh", async (req, res) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) return res.status(400).json({ error: "Refresh token required" });
 
     console.log("🔄 Refreshing Access Token...");
+    const tokenResponse = await exchangeRefreshTokenForAuthTokens(refreshToken);
 
-    // Ask Sony for a fresh token using the Refresh Token
-    const tokenResponse = await exchangeRefreshTokenForAccessToken(refreshToken);
-
-    // Get the new Access Token
-    const accessToken = tokenResponse.accessToken;
-    if (!accessToken) throw new Error("Failed to refresh token");
-
-    console.log("✅ Token Refreshed Successfully!");
+    if (!tokenResponse || !tokenResponse.accessToken)
+      throw new Error("Invalid Refresh Token");
 
     res.json({
-      accessToken,
-      refreshToken: tokenResponse.refreshToken, // Sony gives us a new refresh token too
+      accessToken: tokenResponse.accessToken,
+      refreshToken: tokenResponse.refreshToken,
       expiresIn: tokenResponse.expiresIn,
     });
   } catch (err) {
-    console.error("❌ Refresh Error:", err.message);
+    console.error("❌ Refresh Failed:", err.message);
     res.status(401).json({ error: "Session Expired", details: err.message });
   }
 });
 
-// 🟢 ROBUST NPSSO ROUTE
 app.post("/api/auth/npsso", async (req, res) => {
   try {
     const { npsso } = req.body;
     if (!npsso) return res.status(400).json({ error: "NPSSO token required" });
 
-    console.log("🔄 Exchanging NPSSO for Access Token...");
-
-    // 1. Exchange NPSSO -> Access Code
-    const accessCode = await exchangeNpssoForCode(npsso);
-
-    // 2. Exchange Access Code -> Tokens
-    // This returns: accessToken, expiresIn, idToken, refreshToken, scope, tokenType
-    const tokenResponse = await exchangeCodeForAccessToken(accessCode);
-
+    const accessCode = await exchangeNpssoForAccessCode(npsso);
+    const tokenResponse = await exchangeAccessCodeForAuthTokens(accessCode);
     const accessToken = tokenResponse.accessToken;
-    // 🟢 Prefer idToken for identity, fallback to accessToken
     const idToken = tokenResponse.idToken || accessToken;
 
     if (!accessToken) throw new Error("No access token returned");
 
-    // 3. Decode Token to get Account ID
-    // We try to decode the idToken because it ALWAYS has the 'sub' field
     const jwtPayload = JSON.parse(
       Buffer.from(idToken.split(".")[1], "base64").toString()
     );
-
-    // 🟢 Debugging: Let's see what keys we actually have if this fails again
-    if (!jwtPayload.sub) {
-      console.log("⚠️ Token Payload Keys:", Object.keys(jwtPayload));
-    }
-
     const accountId = jwtPayload.sub;
 
-    console.log(`🔓 Decoded Account ID: ${accountId}`);
-
-    if (!accountId) {
-      throw new Error("Could not find Account ID in token");
-    }
-
-    // 4. Fetch Profile
     const profileRes = await fetch(
       `https://m.np.playstation.com/api/userProfile/v1/internal/users/${accountId}/profiles`,
       {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "User-Agent": "Mozilla/5.0",
-          "Accept-Language": "en-US",
-        },
+        headers: { Authorization: `Bearer ${accessToken}`, "User-Agent": "Mozilla/5.0" },
       }
     );
-
-    if (!profileRes.ok) throw new Error("Failed to fetch user profile");
-
     const profileData = await profileRes.json();
-    console.log(`✅ Logged in as: ${profileData.onlineId}`);
 
     res.json({
       accessToken,
@@ -373,13 +234,11 @@ app.post("/api/auth/npsso", async (req, res) => {
   }
 });
 
-// 2. USER PROFILE
+// 🟢 3. USER ROUTES
 app.get("/api/user/profile/:accountId", requireBearer, async (req, res) => {
   try {
     const { accountId } = req.params;
     const url = `https://m.np.playstation.com/api/userProfile/v1/internal/users/${accountId}/profiles`;
-
-    // 🟢 FIX: Pass req.accessToken to helper
     const json = await fetchPSN(url, req.accessToken);
     res.json(json);
   } catch (err) {
@@ -387,13 +246,10 @@ app.get("/api/user/profile/:accountId", requireBearer, async (req, res) => {
   }
 });
 
-// 3. TROPHY SUMMARY
 app.get("/api/user/summary/:accountId", requireBearer, async (req, res) => {
   try {
     const { accountId } = req.params;
     const url = `https://m.np.playstation.com/api/trophy/v1/users/${accountId}/trophySummary`;
-
-    // 🟢 FIX: Pass req.accessToken
     const json = await fetchPSN(url, req.accessToken);
     res.json(json);
   } catch (err) {
@@ -401,106 +257,13 @@ app.get("/api/user/summary/:accountId", requireBearer, async (req, res) => {
   }
 });
 
-// 4. GAME LIST
-app.get("/api/trophies/:accountId", requireBearer, async (req, res) => {
-  try {
-    const { accountId } = req.params;
-    console.log(`⏳ Fetching Games for ${accountId}...`);
+// 🟢 4. TROPHY ROUTES (Uses New Controller)
+app.get("/api/trophies/:accountId", requireBearer, trophyController.getGameList);
 
-    const trophyUrl = `https://m.np.playstation.com/api/trophy/v1/users/${accountId}/trophyTitles`;
-    const gameListUrl = `https://m.np.playstation.com/api/gamelist/v2/users/${accountId}/titles`;
-
-    // 🟢 FIX: Updated pagination helper to use user token
-    const fetchAll = async (baseUrl, key) => {
-      let items = [];
-      let offset = 0;
-      const limit = 200;
-      while (true) {
-        // Pass req.accessToken here
-        const json = await fetchPSN(
-          `${baseUrl}?limit=${limit}&offset=${offset}`,
-          req.accessToken
-        ).catch(() => ({}));
-        const page = json[key] || [];
-        items.push(...page);
-        if (page.length < limit) break;
-        offset += limit;
-      }
-      return items;
-    };
-
-    const [trophyTitles, gameList] = await Promise.all([
-      fetchAll(trophyUrl, "trophyTitles"),
-      fetchAll(gameListUrl, "titles"),
-    ]);
-
-    const enriched = enrichTitlesWithArtwork(trophyTitles, gameList);
-    res.json({ totalItemCount: enriched.length, trophyTitles: enriched });
-  } catch (err) {
-    console.error("❌ Game List Error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 5. GAME DETAILS
 app.get(
   "/api/trophies/:accountId/:npCommunicationId",
   requireBearer,
-  async (req, res) => {
-    const { accountId, npCommunicationId } = req.params;
-    const { gameName, platform } = req.query;
-
-    try {
-      const baseUrl = `https://m.np.playstation.com/api/trophy/v1`;
-
-      // 🟢 FIX: Use fetchPSN with user token for all calls
-      const [progressData, defData, groupData] = await Promise.all([
-        fetchPSN(
-          `${baseUrl}/users/${accountId}/npCommunicationIds/${npCommunicationId}/trophyGroups/all/trophies?limit=1000`,
-          req.accessToken
-        ).catch(() => ({ trophies: [] })),
-
-        fetchPSN(
-          `${baseUrl}/npCommunicationIds/${npCommunicationId}/trophyGroups/all/trophies`,
-          req.accessToken
-        ).catch(() => ({ trophies: [] })),
-
-        fetchPSN(
-          `${baseUrl}/npCommunicationIds/${npCommunicationId}/trophyGroups`,
-          req.accessToken
-        ).catch(() => ({ trophyGroups: [] })),
-      ]);
-
-      const progress = progressData.trophies || [];
-      const definitions = defData.trophies || [];
-
-      // Smart Merge Strategy
-      let finalTrophies = [];
-      const isRichProgress = progress.length > 0 && !!progress[0].trophyName;
-
-      if (isRichProgress) {
-        console.log(`[PS5] Using rich progress for ${npCommunicationId}`);
-        finalTrophies = progress.map((p) => ({ ...p, earned: !!p.earnedDateTime }));
-      } else {
-        if (definitions.length === 0) {
-          console.warn(`[WARN] Sparse data & no definitions for ${npCommunicationId}`);
-          finalTrophies = progress;
-        } else {
-          console.log(`[PS4] Merging definitions for ${npCommunicationId}`);
-          finalTrophies = mergeTrophies(definitions, progress);
-        }
-      }
-
-      res.json({
-        meta: { npCommunicationId, gameName, platform },
-        trophies: finalTrophies,
-        groups: groupData.trophyGroups || [],
-      });
-    } catch (err) {
-      console.error("❌ Detail Error:", err.message);
-      res.status(500).json({ error: err.message });
-    }
-  }
+  trophyController.getGameDetails
 );
 
 const PORT = process.env.PORT || 4000;

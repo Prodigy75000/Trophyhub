@@ -1,3 +1,4 @@
+// src/hooks/context/usePsnSession.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import { PROXY_BASE_URL } from "../../../config/endpoints";
@@ -10,7 +11,8 @@ const KEY_ACCOUNT_ID = "user_account_id";
 const KEY_ONLINE_ID = "user_online_id";
 const KEY_AVATAR_URL = "user_avatar_url";
 
-export function usePsnAuth() {
+// 🟢 RENAMED: usage is now clear (Session Logic ONLY)
+export function usePsnSession() {
   const [accountId, setAccountId] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile>(null);

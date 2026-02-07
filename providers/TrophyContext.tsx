@@ -1,20 +1,35 @@
-import React, { createContext, useContext, useMemo } from "react";
-import { usePsnAuth } from "../src/hooks/context/usePsnAuth";
+import React, { createContext, useContext, useEffect, useMemo } from "react";
+import { usePsnSession } from "../src/hooks/context/usePsnSession";
 import { useTrophyData } from "../src/hooks/context/useTrophyData";
 import { useXboxLogic } from "../src/hooks/context/useXboxLogic";
+import { useTrophyWatchdog } from "../src/hooks/useTrophyWatchdog"; // 🟢 Used here now
 import { TrophyContextType } from "../src/types/ContextTypes";
+import { calculateTotalTrophies } from "../src/utils/trophyCalculations";
 
 const TrophyContext = createContext<TrophyContextType | null>(null);
 
 export const TrophyProvider = ({ children }: { children: React.ReactNode }) => {
-  // 1. Initialize Hooks
-  const psn = usePsnAuth();
+  const psn = usePsnSession();
   const xbox = useXboxLogic();
-
-  // 2. Data Hook depends on PSN Auth
   const data = useTrophyData(psn.accessToken, psn.accountId);
 
-  // 3. Combine Wrapper for Logout (Clear everything)
+  // 🟢 WATCHDOG INTEGRATION (Moved from Data Hook to Context)
+  // This prevents circular dependencies and keeps the data hook pure.
+  const watchdog = useTrophyWatchdog({
+    accessToken: psn.accessToken,
+    accountId: psn.accountId,
+    isReady: !!data.trophies,
+    onNewTrophyDetected: data.refreshAllTrophies,
+  });
+
+  // Update Watchdog Baseline when trophies change
+  useEffect(() => {
+    if (data.trophies?.trophyTitles) {
+      const total = calculateTotalTrophies(data.trophies.trophyTitles);
+      watchdog.updateBaseline(total);
+    }
+  }, [data.trophies, watchdog]);
+
   const handleLogout = async () => {
     await psn.logout();
     data.setTrophies(null);
@@ -22,13 +37,12 @@ export const TrophyProvider = ({ children }: { children: React.ReactNode }) => {
     xbox.setXboxProfile(null);
   };
 
-  // 4. Create Value Object
   const value = useMemo(
     () => ({
-      ...psn, // accountId, accessToken, user, handleLoginResponse
-      ...xbox, // xboxTitles, xboxProfile, handleXboxLogin, fetchXboxGames
-      ...data, // trophies, refreshAllTrophies, refreshSingleGame
-      logout: handleLogout, // Override logout to clear all states
+      ...psn,
+      ...xbox,
+      ...data, // This includes lastUpdated & isLoadingCache
+      logout: handleLogout,
     }),
     [psn, xbox, data]
   );

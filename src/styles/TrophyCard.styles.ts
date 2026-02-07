@@ -1,17 +1,16 @@
-// components/trophies/TrophyCard.styles.ts
 import { StyleSheet } from "react-native";
 
 export const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     borderRadius: 12,
-    padding: 8,
-    marginBottom: 6,
+    padding: 4,
+    marginBottom: 2,
     alignItems: "center",
   },
   icon: {
-    width: 64,
-    height: 64,
+    width: 100,
+    height: 100,
     borderRadius: 8,
     marginRight: 12,
     backgroundColor: "#2a2a3d",
@@ -41,8 +40,11 @@ export const styles = StyleSheet.create({
   description: {
     color: "#a0a0b0",
     fontSize: 12,
-    lineHeight: 16,
-    marginBottom: 8,
+    lineHeight: 15,
+    // 🟢 FIX 1: Increase height to 34px (gives 2px extra for letter "tails")
+    height: 34,
+    // 🟢 FIX 2: Reduce margin to 6px (removes 2px so card size stays EXACTLY the same)
+    marginBottom: 6,
   },
   // BOTTOM ROW
   bottomRow: {
@@ -93,7 +95,6 @@ export const styles = StyleSheet.create({
   rarityWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.2)",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,

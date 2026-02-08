@@ -1,4 +1,3 @@
-// src/controllers/trophyController.js
 const { mergeTrophies, enrichTitlesWithArtwork } = require("../utils/trophyHelpers");
 const { fetchPSN } = require("../utils/psnClient");
 
@@ -6,25 +5,29 @@ const { fetchPSN } = require("../utils/psnClient");
 const getGameList = async (req, res) => {
   try {
     const { accountId } = req.params;
-    console.log(`⏳ Fetching Games for ${accountId}...`);
-
+    // ... (Keep existing fetch logic) ...
     const trophyUrl = `https://m.np.playstation.com/api/trophy/v1/users/${accountId}/trophyTitles`;
     const gameListUrl = `https://m.np.playstation.com/api/gamelist/v2/users/${accountId}/titles`;
 
-    // Pagination Helper
     const fetchAll = async (baseUrl, key) => {
       let items = [];
       let offset = 0;
       const limit = 200;
       while (true) {
-        const json = await fetchPSN(
-          `${baseUrl}?limit=${limit}&offset=${offset}`,
-          req.accessToken
-        ).catch(() => ({}));
-        const page = json[key] || [];
-        items.push(...page);
-        if (page.length < limit) break;
-        offset += limit;
+        // 🟢 FIX: Handle 401 in pagination too
+        try {
+          const json = await fetchPSN(
+            `${baseUrl}?limit=${limit}&offset=${offset}`,
+            req.accessToken
+          );
+          const page = json[key] || [];
+          items.push(...page);
+          if (page.length < limit) break;
+          offset += limit;
+        } catch (err) {
+          if (err.message?.includes("Expired") || err.code === 2241164) throw err;
+          break; // Stop fetching on other errors
+        }
       }
       return items;
     };
@@ -38,11 +41,15 @@ const getGameList = async (req, res) => {
     res.json({ totalItemCount: enriched.length, trophyTitles: enriched });
   } catch (err) {
     console.error("❌ Game List Error:", err.message);
+    // 🟢 Send 401 so App knows to refresh
+    if (err.message?.includes("Expired") || err.code === 2241164) {
+      return res.status(401).json({ error: "Token Expired" });
+    }
     res.status(500).json({ error: err.message });
   }
 };
 
-// 🟢 2. GET GAME DETAILS (With The Fix)
+// 🟢 2. GET GAME DETAILS
 const getGameDetails = async (req, res) => {
   const { accountId, npCommunicationId } = req.params;
   const { gameName, platform } = req.query;
@@ -50,15 +57,26 @@ const getGameDetails = async (req, res) => {
   try {
     const baseUrl = `https://m.np.playstation.com/api/trophy/v1`;
 
-    // 🟢 SAFE FETCH HELPER (Prevents Crash on 404)
+    // 🟢 UPDATED SAFE FETCH
+    // It catches "Not Found" (404) but RE-THROWS "Expired Token" (401)
     const safeFetch = (promise, fallbackKey) =>
       promise.catch((err) => {
-        console.warn(`⚠️ [${fallbackKey}] Fetch Skipped: ${err.message}`);
-        return { [fallbackKey]: [] }; // Return valid empty object
+        const msg = err.message || "";
+        const isAuthError =
+          msg.includes("Expired") ||
+          msg.includes("Access denied") ||
+          err.code === 2241164;
+
+        if (isAuthError) {
+          // 🚨 CRITICAL: Throw it so we trigger a 401 response!
+          throw err;
+        }
+
+        console.warn(`⚠️ [${fallbackKey}] Fetch Skipped (Likely 404): ${msg}`);
+        return { [fallbackKey]: [] };
       });
 
     const [progressData, defData, groupData] = await Promise.all([
-      // 1. User Progress (Likely to fail for Master List games)
       safeFetch(
         fetchPSN(
           `${baseUrl}/users/${accountId}/npCommunicationIds/${npCommunicationId}/trophyGroups/all/trophies?limit=1000`,
@@ -67,7 +85,6 @@ const getGameDetails = async (req, res) => {
         "trophies"
       ),
 
-      // 2. Global Definitions
       safeFetch(
         fetchPSN(
           `${baseUrl}/npCommunicationIds/${npCommunicationId}/trophyGroups/all/trophies`,
@@ -76,7 +93,6 @@ const getGameDetails = async (req, res) => {
         "trophies"
       ),
 
-      // 3. Groups
       safeFetch(
         fetchPSN(
           `${baseUrl}/npCommunicationIds/${npCommunicationId}/trophyGroups`,
@@ -86,22 +102,18 @@ const getGameDetails = async (req, res) => {
       ),
     ]);
 
+    // ... (Keep your existing merge logic exactly as is) ...
     const progress = progressData.trophies || [];
     const definitions = defData.trophies || [];
-
-    // Smart Merge Strategy
     let finalTrophies = [];
     const isRichProgress = progress.length > 0 && !!progress[0].trophyName;
 
     if (isRichProgress) {
-      console.log(`[PS5] Using rich progress for ${npCommunicationId}`);
       finalTrophies = progress.map((p) => ({ ...p, earned: !!p.earnedDateTime }));
     } else {
       if (definitions.length === 0) {
-        console.warn(`[WARN] No definitions found for ${npCommunicationId}`);
-        finalTrophies = [];
+        finalTrophies = progress; // Empty fallback
       } else {
-        console.log(`[PS4] Merging definitions for ${npCommunicationId}`);
         finalTrophies = mergeTrophies(definitions, progress);
       }
     }
@@ -113,6 +125,12 @@ const getGameDetails = async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Detail Error:", err.message);
+
+    // 🟢 HANDLE THE 401 RESPONSE
+    if (err.message?.includes("Expired") || err.code === 2241164) {
+      return res.status(401).json({ error: "Session Expired", details: err.message });
+    }
+
     res.status(500).json({ error: err.message });
   }
 };

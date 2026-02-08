@@ -10,10 +10,6 @@ type WatchdogProps = {
   onNewTrophyDetected: () => void;
 };
 
-/**
- * Polls the backend every 30s to check if the total trophy count has changed.
- * If changed, it triggers a refresh callback.
- */
 export function useTrophyWatchdog({
   accessToken,
   accountId,
@@ -28,10 +24,16 @@ export function useTrophyWatchdog({
 
     const checkTrophyCount = async () => {
       try {
-        // Lightweight fetch just to check numbers
         const res = await fetch(`${PROXY_BASE_URL}/api/user/summary/${accountId}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
+
+        // 🟢 DEBUG: Watch for the 401
+        if (res.status === 401) {
+          console.log("🔒 [Watchdog] Token Expired (401). Waiting for app refresh...");
+          return; // Stop processing this attempt
+        }
+
         const data = await res.json();
 
         if (data.earnedTrophies) {
@@ -43,13 +45,11 @@ export function useTrophyWatchdog({
 
           const oldTotal = lastTotalTrophiesRef.current;
 
-          // Initialize baseline on first run
           if (oldTotal === -1) {
             lastTotalTrophiesRef.current = newTotal;
             return;
           }
 
-          // 🚨 CHANGE DETECTED
           if (newTotal > oldTotal) {
             console.log(`🏆 [Watchdog] Change detected: ${oldTotal} -> ${newTotal}`);
             lastTotalTrophiesRef.current = newTotal;
@@ -57,8 +57,7 @@ export function useTrophyWatchdog({
           }
         }
       } catch (e) {
-        // Silent fail expected on network glitches
-        // console.warn("[Watchdog] Poll failed", e);
+        console.warn("[Watchdog] Poll failed (Network/Server)", e);
       }
     };
 
@@ -68,7 +67,7 @@ export function useTrophyWatchdog({
     // 2. Poll every 30 seconds
     const interval = setInterval(checkTrophyCount, 30000);
 
-    // 3. Check immediately when App comes to foreground
+    // 3. Check when App resumes
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (appStateRef.current.match(/inactive|background/) && nextState === "active") {
         console.log("📱 [Watchdog] App resumed, checking...");
@@ -81,9 +80,8 @@ export function useTrophyWatchdog({
       clearInterval(interval);
       subscription.remove();
     };
-  }, [accessToken, accountId, onNewTrophyDetected]);
+  }, [accessToken, accountId, isReady, onNewTrophyDetected]); // Dependency array ensures restart on token change
 
-  // Expose a helper to manually update the baseline if we know we just fetched data
   const updateBaseline = (total: number) => {
     lastTotalTrophiesRef.current = total;
   };

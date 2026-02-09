@@ -97,12 +97,28 @@ export default function GameScreen() {
 
   // --- EFFECTS ---
   useEffect(() => {
-    console.log(`🎮 GameScreen Mounted. ID: ${gameId}`);
-    if (game) {
-      console.log(`   - Found in Context: ${game.trophyTitleName}`);
-      console.log(`   - Current Trophy Count: ${processedTrophies.length}`);
+    if (game && processedTrophies.length > 0) {
+      // Calculate totals from metadata (Available immediately from Context)
+      const def = game.definedTrophies ?? ZERO_COUNTS;
+      const earned = game.earnedTrophies ?? ZERO_COUNTS;
+
+      const totalCount =
+        (def.bronze ?? 0) + (def.silver ?? 0) + (def.gold ?? 0) + (def.platinum ?? 0);
+      const totalEarned =
+        (earned.bronze ?? 0) +
+        (earned.silver ?? 0) +
+        (earned.gold ?? 0) +
+        (earned.platinum ?? 0);
+
+      console.log("------------------------------------------------");
+      console.log(`🎮 GAME LOADED: ${game.trophyTitleName}`);
+      console.log(`   🆔 ID:       ${game.npCommunicationId}`);
+      console.log(`   🕹️ Platform: ${game.trophyTitlePlatform}`);
+      console.log(`   🏆 Stats:    ${totalEarned} / ${totalCount} Earned`);
+      console.log(`   📝 List:     ${processedTrophies.length} items rendered`); // This starts at 0, then updates
+      console.log("------------------------------------------------");
     } else {
-      console.log("   - Game NOT found in context (Loading...)");
+      console.log(`⏳ [GameScreen] Searching Context for ID: ${gameId}...`);
     }
   }, [gameId, game, processedTrophies.length]);
   useEffect(() => {

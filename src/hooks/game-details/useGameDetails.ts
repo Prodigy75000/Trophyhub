@@ -17,7 +17,7 @@ export function useGameDetails(
   const gameObject = useMemo((): UnifiedGame | null => {
     if (!id) return null;
 
-    // A. PSN
+    // A. PSN (User Owned)
     const psnGame = trophies?.trophyTitles?.find((t: any) => t.npCommunicationId === id);
     if (psnGame) {
       return {
@@ -51,7 +51,7 @@ export function useGameDetails(
       };
     }
 
-    // C. Master
+    // C. Master (Global / Unowned)
     const master = (masterGamesRaw as any[]).find((m) => {
       if (m.canonicalId === id) return true;
       return m.linkedVersions?.some(
@@ -60,7 +60,21 @@ export function useGameDetails(
     });
 
     if (master) {
-      // 🟢 FIX: Map JSON trophies to App format so they appear!
+      // 🟢 1. Find the best version to use for IDs
+      // Prioritize PS5 -> PS4 -> PSVita -> PS3
+      const validVersion =
+        master.linkedVersions?.find(
+          (v: any) => v.platform === "PS5" && v.npCommunicationId
+        ) ||
+        master.linkedVersions?.find(
+          (v: any) => v.platform === "PS4" && v.npCommunicationId
+        ) ||
+        master.linkedVersions?.find((v: any) => v.npCommunicationId);
+
+      const targetNpId = validVersion?.npCommunicationId;
+      const targetPlatform = validVersion?.platform || "PlayStation";
+
+      // 🟢 2. Map JSON trophies (if they exist in the file)
       const mappedTrophies = (master.trophies || []).map((t: any) => ({
         trophyId: t.id,
         trophyName: t.name,
@@ -73,13 +87,15 @@ export function useGameDetails(
 
       return {
         source: "MASTER",
-        id: id,
+        id: id, // Keep the canonical ID for navigation
         trophyTitleName: master.displayName,
-        trophyTitlePlatform: "Unknown",
+        trophyTitlePlatform: targetPlatform,
         trophyTitleIconUrl: master.iconUrl,
-        trophyList: mappedTrophies, // 🟢 Pass the mapped list
+        trophyList: mappedTrophies,
         masterData: master,
         progress: 0,
+        // 🟢 3. CRITICAL: Pass the real NPWR ID so the fetcher works!
+        npCommunicationId: targetNpId,
         definedTrophies: master.stats || { bronze: 0, silver: 0, gold: 0, platinum: 0 },
       };
     }

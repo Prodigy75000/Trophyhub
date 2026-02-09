@@ -9,19 +9,19 @@ export function useGameFetcher(gameId: string, gameObject: UnifiedGame | null) {
 
   const [localTrophies, setLocalTrophies] = useState<any[]>([]);
   const [trophyGroups, setTrophyGroups] = useState<any[]>([]);
+  // 🟢 NEW: Track which ID this data actually belongs to
+  const [fetchedGameId, setFetchedGameId] = useState<string | null>(null);
+
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   // Helper to fetch data
   const fetchData = async (isRefresh = false) => {
-    // If we don't have the basic game object yet, or auth is missing, stop.
     if (!gameObject || !accountId || !accessToken) {
       if (!isRefresh) setIsInitialLoading(false);
       return;
     }
 
-    // Optimization: If it's a USER source and we already have the list from Context, skip fetch
-    // ⚠️ NOTE: We skip this optimization if 'isRefresh' is true, which allows the Watchdog to force an update.
     if (
       !isRefresh &&
       gameObject.source === "USER" &&
@@ -29,14 +29,14 @@ export function useGameFetcher(gameId: string, gameObject: UnifiedGame | null) {
       gameObject.trophyList.length > 0
     ) {
       setLocalTrophies(gameObject.trophyList);
+      setFetchedGameId(gameId); // 🟢 Match!
       setIsInitialLoading(false);
       return;
     }
 
     try {
       if (isRefresh) setRefreshing(true);
-      // Don't set initial loading if we already have data (prevent flash)
-      else if (localTrophies.length === 0) setIsInitialLoading(true);
+      else setIsInitialLoading(true);
 
       const platformParam =
         gameObject.trophyTitlePlatform !== "Unknown"
@@ -54,7 +54,10 @@ export function useGameFetcher(gameId: string, gameObject: UnifiedGame | null) {
 
       const data = await res.json();
 
-      if (data.trophies) setLocalTrophies(data.trophies);
+      if (data.trophies) {
+        setLocalTrophies(data.trophies);
+        setFetchedGameId(gameId); // 🟢 Mark data as belonging to THIS game
+      }
       if (data.groups) setTrophyGroups(data.groups);
     } catch (e) {
       console.warn("Fetch failed", e);
@@ -64,24 +67,27 @@ export function useGameFetcher(gameId: string, gameObject: UnifiedGame | null) {
     }
   };
 
-  // 🟢 FIX: Trigger fetch when Progress changes (Watchdog detected new trophy)
   useEffect(() => {
-    // If progress changed, it means the Context updated. We should silently refetch details.
-    // We pass 'true' to fetchData to bypass the "Use Cached Context" optimization
-    // and force a network hit to get the new 'earned' booleans.
+    // 1. Wipe old data
+    setLocalTrophies([]);
+    setTrophyGroups([]);
+    setFetchedGameId(null); // 🟢 Reset ID match
+
+    // 2. Load
+    setIsInitialLoading(true);
+
     const isUpdateTrigger = localTrophies.length > 0;
     fetchData(isUpdateTrigger);
-  }, [
-    gameId,
-    gameObject?.source,
-    gameObject?.progress, // <--- 🚨 THE TRIGGER
-    gameObject?.earnedTrophies, // <--- Safety fallback
-  ]);
+  }, [gameId, gameObject?.source, gameObject?.progress, gameObject?.earnedTrophies]);
 
   const onRefresh = () => fetchData(true);
 
+  // 🟢 MAGIC FIX: Synchronously return [] if IDs mismatch
+  // This prevents the "Ghost Render" before useEffect runs
+  const safeLocalTrophies = fetchedGameId === gameId ? localTrophies : [];
+
   return {
-    localTrophies,
+    localTrophies: safeLocalTrophies, // Return the safe list
     trophyGroups,
     isInitialLoading,
     refreshing,

@@ -60,8 +60,15 @@ export type GameVersion = {
     earnedSilver: number;
     earnedGold: number;
     earnedPlatinum: number;
-    // 🟢 ADDED: Optional generic 'earned' for Gamerscore
     earned?: number;
+  };
+  // 🟢 NEW: Fallback stats from Master JSON
+  masterStats?: {
+    bronze: number;
+    silver: number;
+    gold: number;
+    platinum: number;
+    total: number;
   };
   isOwned: boolean;
 };
@@ -120,13 +127,11 @@ const GameCard = ({
 
   const displayImage = icon;
   const heroArt = art || icon;
-
   const isSquareFormat = activeVer.platform === "PS5";
   const imageResizeMode = isSquareFormat ? "cover" : "contain";
 
-  // Check if started (Generic: Trophies OR Gamerscore)
   const totalEarned =
-    (activeVer.counts.earned || 0) + // Check Gamerscore first
+    (activeVer.counts.earned || 0) +
     activeVer.counts.earnedBronze +
     activeVer.counts.earnedSilver +
     activeVer.counts.earnedGold +
@@ -153,15 +158,19 @@ const GameCard = ({
     outputRange: ["rgba(0,0,0,0)", "rgba(255, 215, 0, 0.8)"],
   });
 
-  // 🟢 1. RENDER STATS LOGIC
+  // 🟢 HELPER: Get Total (User Data OR Master Fallback)
+  const getCount = (key: keyof typeof activeVer.counts) => {
+    // If user data exists (non-zero), use it. Otherwise try masterStats.
+    // @ts-ignore
+    return activeVer.counts[key] || activeVer.masterStats?.[key] || 0;
+  };
+
   const renderStats = () => {
-    // A. XBOX MODE (Gamerscore)
     if (activeVer.platform === "XBOX") {
       return (
         <View
           style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 }}
         >
-          {/* Gamerscore Badge */}
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View
               style={{
@@ -186,8 +195,6 @@ const GameCard = ({
               </Text>
             </Text>
           </View>
-
-          {/* Completed Badge */}
           {activeVer.progress === 100 && (
             <View
               style={{
@@ -208,29 +215,34 @@ const GameCard = ({
       );
     }
 
-    // B. PSN MODE (Trophies)
+    // 🟢 UPDATED: Use Fallback Stats
+    const platTotal = getCount("platinum");
+    const goldTotal = getCount("gold");
+    const silverTotal = getCount("silver");
+    const bronzeTotal = getCount("bronze");
+
     return (
       <View style={styles.statsRow}>
         <StatItem
           icon={ICONS.platinum}
           earned={activeVer.counts.earnedPlatinum}
-          total={activeVer.counts.platinum}
-          disabled={activeVer.counts.platinum === 0}
+          total={platTotal}
+          disabled={platTotal === 0}
         />
         <StatItem
           icon={ICONS.gold}
           earned={activeVer.counts.earnedGold}
-          total={activeVer.counts.gold}
+          total={goldTotal}
         />
         <StatItem
           icon={ICONS.silver}
           earned={activeVer.counts.earnedSilver}
-          total={activeVer.counts.silver}
+          total={silverTotal}
         />
         <StatItem
           icon={ICONS.bronze}
           earned={activeVer.counts.earnedBronze}
-          total={activeVer.counts.bronze}
+          total={bronzeTotal}
         />
       </View>
     );
@@ -258,8 +270,6 @@ const GameCard = ({
                 />
               )}
             </View>
-
-            {/* Platform Badges */}
             <View style={styles.versionRow}>
               {uniquePlatforms.map((plat) => (
                 <TouchableOpacity
@@ -290,7 +300,6 @@ const GameCard = ({
               {title}
             </Text>
 
-            {/* 🟢 2. INJECT RENDER HELPER HERE */}
             {renderStats()}
 
             {hasStarted ? (

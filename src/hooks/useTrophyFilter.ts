@@ -67,6 +67,12 @@ export function useTrophyFilter(
       const master = identifyGame(game.npCommunicationId, game.trophyTitleName);
       const key = master?.canonicalId || game.npCommunicationId;
 
+      // 🟢 INJECT MASTER STATS (Fallback for Owned Games)
+      if (master?.stats) {
+        // @ts-ignore - Dynamic injection
+        processed.masterStats = master.stats;
+      }
+
       if (!groupedMap.has(key)) {
         // Image Priority: Master Store -> Icon -> Master Grid
         const manualArt = master?.art;
@@ -94,6 +100,12 @@ export function useTrophyFilter(
       const master = identifyGame(game.titleId, game.name);
       const key = master?.canonicalId || `xbox_${game.titleId}`;
 
+      // 🟢 INJECT MASTER STATS (If we ever map Xbox to Master)
+      if (master?.stats) {
+        // @ts-ignore
+        processed.masterStats = master.stats;
+      }
+
       if (!groupedMap.has(key)) {
         groupedMap.set(key, {
           id: key,
@@ -113,29 +125,30 @@ export function useTrophyFilter(
         const key = master.canonicalId;
         if (!key) return;
 
-        // If we haven't seen this game yet, add it
-        if (!groupedMap.has(key)) {
+        // Determine if we need to add this game to the map
+        let group = groupedMap.get(key);
+
+        if (!group) {
           const mArt = master.art;
           const icon = mArt?.storesquare || mArt?.square || master.iconUrl;
           const art = mArt?.hero || mArt?.master || icon;
 
-          groupedMap.set(key, {
+          group = {
             id: key,
             title: master.displayName,
             icon,
             art,
             tags: master.tags || [],
             versions: [],
-          });
+          };
+          groupedMap.set(key, group);
         }
-
-        const group = groupedMap.get(key)!;
 
         // Add "Ghost" versions for unowned platforms
         master.linkedVersions?.forEach((v) => {
           // Skip if we already have this version (e.g. we own the PS5 version)
           if (
-            group.versions.some(
+            group!.versions.some(
               (gv) => gv.id === v.npCommunicationId || gv.id === v.titleId
             )
           )
@@ -149,12 +162,15 @@ export function useTrophyFilter(
 
           if (!isPlatformEnabled(normPlat)) return;
 
-          group.versions.push({
+          group!.versions.push({
             id: v.npCommunicationId || v.titleId || "unknown",
             platform: normPlat,
             region: v.region,
             progress: 0,
             isOwned: false,
+            // 🟢 INJECT MASTER STATS (Crucial for Global Mode display)
+            // @ts-ignore
+            masterStats: master.stats,
             counts: {
               total: 0,
               bronze: 0,
@@ -217,7 +233,7 @@ export function useTrophyFilter(
     const dir = sortDirection === "ASC" ? 1 : -1;
 
     list.sort((a, b) => {
-      const bestA = a.versions[0]; // Simplified sort logic
+      const bestA = a.versions[0];
       const bestB = b.versions[0];
 
       // Pin Logic

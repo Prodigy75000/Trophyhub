@@ -86,6 +86,12 @@ const GameGridItem = ({
   const isPS5 = activeVer?.platform === "PS5";
   const dynamicResizeMode = "contain";
 
+  // 🟢 HELPER: Use User Data if available, otherwise Master Stats
+  const getCount = (key: keyof typeof activeVer.counts) => {
+    // @ts-ignore
+    return activeVer.counts[key] || activeVer.masterStats?.[key] || 0;
+  };
+
   useEffect(() => {
     if (justUpdated) {
       Animated.sequence([
@@ -156,27 +162,29 @@ const GameGridItem = ({
           {isPeeking && (
             <View style={styles.peekOverlay}>
               <View style={styles.peekContent}>
-                {activeVer.counts.platinum > 0 && (
+                {/* 🟢 UPDATED: Check for Platinum via helper or Master Stats */}
+                {(activeVer.counts.platinum > 0 ||
+                  (activeVer.masterStats?.platinum ?? 0) > 0) && (
                   <PeekRow
                     icon={trophyIcons.platinum}
                     earned={activeVer.counts.earnedPlatinum}
-                    total={activeVer.counts.platinum}
+                    total={getCount("platinum")} // 🟢 Use Helper
                   />
                 )}
                 <PeekRow
                   icon={trophyIcons.gold}
                   earned={activeVer.counts.earnedGold}
-                  total={activeVer.counts.gold}
+                  total={getCount("gold")} // 🟢 Use Helper
                 />
                 <PeekRow
                   icon={trophyIcons.silver}
                   earned={activeVer.counts.earnedSilver}
-                  total={activeVer.counts.silver}
+                  total={getCount("silver")} // 🟢 Use Helper
                 />
                 <PeekRow
                   icon={trophyIcons.bronze}
                   earned={activeVer.counts.earnedBronze}
-                  total={activeVer.counts.bronze}
+                  total={getCount("bronze")} // 🟢 Use Helper
                 />
               </View>
             </View>

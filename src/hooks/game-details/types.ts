@@ -13,6 +13,7 @@ export interface XboxTitle {
     totalGamerscore: number;
     progressPercentage: number;
   };
+
   lastUnlock: string;
 }
 
@@ -25,6 +26,13 @@ export interface MasterGameEntry {
     hero?: string;
     store?: string;
     [key: string]: string | undefined;
+  };
+  stats?: {
+    bronze: number;
+    silver: number;
+    gold: number;
+    platinum: number;
+    total: number;
   };
   linkedVersions?: {
     platform: string;

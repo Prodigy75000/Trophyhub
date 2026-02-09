@@ -13,7 +13,7 @@ export function useGameIdentifier(id: string) {
     const cleanId = String(id).trim();
     const baseId = cleanId.split("_")[0]; // "NPWR12345_00" -> "NPWR12345"
 
-    console.log(`\n🔍 [Identifier] Looking for: "${cleanId}" (Base: "${baseId}")`);
+    console.log(`\n🔍 [Identifier] Looking for: "${baseId}`);
 
     // 🟢 2. MASTER RECORD LOOKUP (Robust)
     const master = (masterGamesRaw as any[]).find((m) => {

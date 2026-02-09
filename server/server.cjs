@@ -21,6 +21,21 @@ const AZURE_CLIENT_ID = "5e278654-b281-411b-85f4-eb7fb056e5ba";
 
 const app = express();
 
+// --- 🟢 DEDUPLICATED LOGGER ---
+const recentLogs = new Set();
+app.use((req, res, next) => {
+  const logKey = `${req.method} ${req.originalUrl}`;
+
+  if (!recentLogs.has(logKey)) {
+    console.log(`🔔 SERVER HIT: ${logKey}`);
+    recentLogs.add(logKey);
+
+    // Clear the key after 2 seconds to allow future valid hits
+    setTimeout(() => recentLogs.delete(logKey), 2000);
+  }
+  next();
+});
+
 // Middleware
 app.use(
   cors({
@@ -30,12 +45,6 @@ app.use(
   })
 );
 app.use(express.json());
-
-// Logger
-app.use((req, res, next) => {
-  console.log(`🔔 SERVER HIT: ${req.method} ${req.originalUrl}`);
-  next();
-});
 
 // Auth Guard
 function requireBearer(req, res, next) {

@@ -17,7 +17,15 @@ async function fetchPSN(url, accessToken, options = {}) {
 
   if (!response.ok) {
     const text = await response.text();
-    console.error(`❌ PSN API Error [${response.status}]:`, text);
+
+    // 🟢 SILENCED 404: We only log serious errors (500, 403, etc.)
+    // 404s are expected for legacy titles and are handled by the fallback logic.
+    if (response.status !== 404) {
+      console.error(`❌ PSN API Error [${response.status}]:`, text);
+    }
+
+    // We still throw the error so trophyController can detect the 404
+    // and trigger the legacy retry fallback.
     throw new Error(`PSN API Error: ${response.status}`);
   }
 

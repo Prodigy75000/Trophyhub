@@ -36,8 +36,6 @@ export function useTrophyProcessor(
       source = "CONTEXT";
     }
 
-    console.log(`📊 [Processor] Source: ${source}, Items: ${baseList.length}`);
-
     let list = [...baseList];
 
     // Filter

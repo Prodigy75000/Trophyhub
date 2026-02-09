@@ -2,6 +2,9 @@
 const { mergeTrophies, enrichTitlesWithArtwork } = require("./trophyHelpers");
 const { fetchPSN } = require("./psnClient");
 
+// 🟢 NEW: Cache to prevent duplicate detail logs
+const recentDetailLogs = new Set();
+
 /**
  * Advanced Helper for Legacy Platforms (PS4, PS3, Vita)
  * - Tries standard URL first.
@@ -14,21 +17,21 @@ async function fetchWithPlatformFallback(url, accessToken) {
     const is404 = error.message && error.message.includes("404");
 
     if (is404) {
-      console.log(`⚠️ 404 on ${url}. Attempting Legacy Fallbacks...`);
+      // 🟢 SILENCED: Reduced noise for legacy retry attempts
+      // console.log(`⚠️ 404 on ${url}. Attempting Legacy Fallbacks...`);
 
       const separator = url.includes("?") ? "&" : "?";
 
       // Fallback 1: The standard legacy "trophy" service
       try {
-        console.log(`🔄 Retrying with npServiceName=trophy...`);
+        // console.log(`🔄 Retrying with npServiceName=trophy...`);
         return await fetchPSN(`${url}${separator}npServiceName=trophy`, accessToken);
       } catch (e1) {
         // Fallback 2: The "trophy2" service often used for older titles
         try {
-          console.log(`🔄 Retrying with npServiceName=trophy2...`);
+          // console.log(`🔄 Retrying with npServiceName=trophy2...`);
           return await fetchPSN(`${url}${separator}npServiceName=trophy2`, accessToken);
         } catch (e2) {
-          // If all legacy attempts fail, throw the original 404
           throw error;
         }
       }
@@ -40,7 +43,7 @@ async function fetchWithPlatformFallback(url, accessToken) {
 /**
  * Safe fetch wrapper:
  * - NEVER swallows auth errors (so the app can refresh)
- * - Swallows "not found"-style errors (after PS4 fallback attempt) and returns empty arrays
+ * - Swallows "not found"-style errors and returns empty arrays
  */
 async function safeFetchUrl(url, accessToken, fallbackKey) {
   try {
@@ -57,11 +60,10 @@ async function safeFetchUrl(url, accessToken, fallbackKey) {
   }
 }
 
-// 🟢 1. GET GAME LIST (pagination + artwork enrichment)
+// 🟢 1. GET GAME LIST
 const getGameList = async (req, res) => {
   try {
     const { accountId } = req.params;
-
     const trophyUrl = `https://m.np.playstation.com/api/trophy/v1/users/${accountId}/trophyTitles`;
     const gameListUrl = `https://m.np.playstation.com/api/gamelist/v2/users/${accountId}/titles`;
 
@@ -71,24 +73,20 @@ const getGameList = async (req, res) => {
       const limit = 200;
 
       while (true) {
-        // 🟢 FIX: Handle 401 in pagination too
         try {
           const json = await fetchPSN(
             `${baseUrl}?limit=${limit}&offset=${offset}`,
             req.accessToken
           );
-
           const page = json[key] || [];
           items.push(...page);
-
           if (page.length < limit) break;
           offset += limit;
         } catch (err) {
           if (err.message?.includes("Expired") || err.code === 2241164) throw err;
-          break; // Stop fetching on other errors
+          break;
         }
       }
-
       return items;
     };
 
@@ -101,33 +99,27 @@ const getGameList = async (req, res) => {
     res.json({ totalItemCount: enriched.length, trophyTitles: enriched });
   } catch (err) {
     console.error("❌ Game List Error:", err.message);
-
-    // 🟢 Send 401 so App knows to refresh
     if (err.message?.includes("Expired") || err.code === 2241164) {
       return res.status(401).json({ error: "Token Expired" });
     }
-
     res.status(500).json({ error: err.message });
   }
 };
 
-// 🟢 2. GET GAME DETAILS (merge logic + PS4 fallback + proper 401 bubbling)
+// 🟢 2. GET GAME DETAILS
 const getGameDetails = async (req, res) => {
   const { accountId, npCommunicationId } = req.params;
   const { gameName, platform } = req.query;
 
-  console.log(`📡 Fetching Details for: ${npCommunicationId}`);
+  // 🟢 DEDUPLICATED: Only log this specific ID once every 5 seconds
+  if (!recentDetailLogs.has(npCommunicationId)) {
+    console.log(`📡 Fetching Details for: ${npCommunicationId}`);
+    recentDetailLogs.add(npCommunicationId);
+    setTimeout(() => recentDetailLogs.delete(npCommunicationId), 5000);
+  }
 
   try {
     const baseUrl = `https://m.np.playstation.com/api/trophy/v1`;
-
-    // We keep your original 3-call design:
-    // - progress (user endpoint with earned states)
-    // - definitions (non-user endpoint)
-    // - groups (trophy groups / DLCs)
-    //
-    // Each call uses PS4 fallback on 404, but NEVER masks auth errors.
-
     const progressUrl = `${baseUrl}/users/${accountId}/npCommunicationIds/${npCommunicationId}/trophyGroups/all/trophies?limit=1000`;
     const definitionsUrl = `${baseUrl}/npCommunicationIds/${npCommunicationId}/trophyGroups/all/trophies`;
     const groupsUrl = `${baseUrl}/npCommunicationIds/${npCommunicationId}/trophyGroups`;
@@ -138,7 +130,6 @@ const getGameDetails = async (req, res) => {
       safeFetchUrl(groupsUrl, req.accessToken, "trophyGroups"),
     ]);
 
-    // --- Keep your existing merge logic ---
     const progress = progressData.trophies || [];
     const definitions = defData.trophies || [];
     let finalTrophies = [];
@@ -146,16 +137,10 @@ const getGameDetails = async (req, res) => {
     const isRichProgress = progress.length > 0 && !!progress[0].trophyName;
 
     if (isRichProgress) {
-      finalTrophies = progress.map((p) => ({
-        ...p,
-        earned: !!p.earnedDateTime,
-      }));
+      finalTrophies = progress.map((p) => ({ ...p, earned: !!p.earnedDateTime }));
     } else {
-      if (definitions.length === 0) {
-        finalTrophies = progress; // Empty fallback
-      } else {
-        finalTrophies = mergeTrophies(definitions, progress);
-      }
+      finalTrophies =
+        definitions.length === 0 ? progress : mergeTrophies(definitions, progress);
     }
 
     res.json({
@@ -165,12 +150,9 @@ const getGameDetails = async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Detail Error:", err.message);
-
-    // 🟢 HANDLE THE 401 RESPONSE
     if (err.message?.includes("Expired") || err.code === 2241164) {
       return res.status(401).json({ error: "Session Expired", details: err.message });
     }
-
     res.status(500).json({ error: err.message });
   }
 };

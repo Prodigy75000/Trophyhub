@@ -52,22 +52,6 @@ export function useGameDetails(
   // 4. GROUP TROPHIES
   const groupedData = useTrophyGrouper(trophyGroups, masterRecord, processedTrophies);
 
-  // 🔍 LOG: DIAGNOSTICS (Optional cleanup)
-  useEffect(() => {
-    if (!isInitialLoading && localTrophies.length > 0) {
-      console.log(`\n\n🔍 --- DIAGNOSTIC START: ${id} ---`);
-      console.log(`📡 [Fetcher] Trophies: ${localTrophies.length}`);
-      console.log(`📡 [Fetcher] Groups: ${trophyGroups?.length ?? 0}`);
-      console.log(`📋 [Processed] Total: ${processedTrophies.length}`);
-    }
-  }, [
-    isInitialLoading,
-    id,
-    localTrophies.length,
-    trophyGroups?.length,
-    processedTrophies.length,
-  ]);
-
   return {
     game: gameObject,
     isLoadingDetails: isInitialLoading,

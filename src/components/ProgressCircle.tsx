@@ -1,7 +1,10 @@
 // components/ProgressCircle.tsx
 import React, { memo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Svg, { Circle, Defs, LinearGradient, Stop } from "react-native-svg";
+
+// Styles
+import { styles } from "../styles/ProgressCircle.styles";
 
 type Props = {
   size?: number;
@@ -12,13 +15,16 @@ type Props = {
 function ProgressCircle({ size = 34, strokeWidth = 4, progress }: Props) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
+
   // Ensure progress stays between 0-100 to prevent visual glitches
   const clampedProgress = Math.min(100, Math.max(0, progress));
   const offset = circumference - (clampedProgress / 100) * circumference;
 
   const isComplete = clampedProgress === 100;
 
-  // Unique IDs for gradients (scoped to this file context mostly)
+  // Unique IDs for gradients
+  // Note: In very large lists, unique IDs per instance might be safer,
+  // but for standard usage this is usually fine.
   const BLUE_GRADIENT_ID = "blueGradient";
   const GOLD_GRADIENT_ID = "goldGradient";
 
@@ -80,22 +86,3 @@ function ProgressCircle({ size = 34, strokeWidth = 4, progress }: Props) {
 }
 
 export default memo(ProgressCircle);
-
-// ---------------------------------------------------------------------------
-// STYLES
-// ---------------------------------------------------------------------------
-
-const styles = StyleSheet.create({
-  container: {
-    justifyContent: "center",
-    alignItems: "center",
-    position: "relative",
-  },
-  svg: {
-    position: "absolute",
-    transform: [{ rotate: "-90deg" }], // Rotate so progress starts at top
-  },
-  text: {
-    fontWeight: "700",
-  },
-});

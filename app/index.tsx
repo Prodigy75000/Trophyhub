@@ -2,14 +2,13 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, FlatList, Text, TouchableOpacity, View } from "react-native";
 import {
   Gesture,
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import { runOnJS } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Contexts & Config
@@ -19,9 +18,7 @@ import { useTrophy } from "../providers/TrophyContext";
 // Custom Hooks
 import { useTrophyFilter } from "../src/hooks/useTrophyFilter";
 
-// ⚠️ DATA LOADING STRATEGY
-// We statically import the "High Quality" database.
-// We DO NOT import master_shovelware.json here to save memory.
+// Data
 import masterGamesRaw from "../data/master_games.json";
 
 // Components
@@ -40,7 +37,8 @@ import ProfileDashboard from "../src/components/trophies/ProfileDashboard";
 // Styles
 import { styles } from "../src/styles/index.styles";
 
-const BASE_HEADER_HEIGHT = 60;
+// 🟢 FIX 1: Exact height of the single-row HeaderActionBar (12px pad + 40px btn + 12px pad)
+const BASE_HEADER_HEIGHT = 64;
 const STORAGE_KEY_GRID = "USER_GRID_COLUMNS";
 
 export default function HomeScreen() {
@@ -80,7 +78,7 @@ export default function HomeScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const [ownershipMode, setOwnershipMode] = useState<OwnershipMode>("OWNED");
-  const [showShovelware, setShowShovelware] = useState(false); // Default: Hidden
+  const [showShovelware, setShowShovelware] = useState(false);
 
   const [platforms, setPlatforms] = useState<PlatformFilter>({
     PS5: true,
@@ -89,16 +87,12 @@ export default function HomeScreen() {
     PSVITA: true,
   });
 
-  // --- 2. DATA STRATEGY (Lazy Load Shovelware) ---
+  // --- 2. DATA STRATEGY ---
   const masterDatabase = useMemo(() => {
-    // A. Always load the Good Games
     const highQualityGames = masterGamesRaw as unknown as any[];
-
-    // B. If user wants Shovelware, lazy-load that JSON now
     if (showShovelware) {
       try {
-        console.log("⚠️ Loading Shovelware Database into memory...");
-        // This 'require' only executes if the switch is ON
+        console.log("⚠️ Loading Shovelware Database...");
         const shovelwareGames = require("../data/master_shovelware.json");
         return [...highQualityGames, ...shovelwareGames];
       } catch (e) {
@@ -106,15 +100,13 @@ export default function HomeScreen() {
         return highQualityGames;
       }
     }
-
-    // C. Default: Only return the Good Games
     return highQualityGames;
   }, [showShovelware]);
 
   // --- 3. LOGIC HOOKS ---
   const { userStats, sortedList } = useTrophyFilter(
     trophies,
-    masterDatabase, // 🟢 Pass the dynamic database
+    masterDatabase,
     xboxTitles,
     searchText,
     filterMode,
@@ -126,9 +118,9 @@ export default function HomeScreen() {
     platforms
   );
 
-  const togglePlatform = (key: keyof PlatformFilter) => {
+  const togglePlatform = useCallback((key: keyof PlatformFilter) => {
     setPlatforms((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  }, []);
 
   // --- 4. EFFECTS ---
 
@@ -144,12 +136,8 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!accountId || !accessToken) return;
 
-    console.log("🔄 User Logged In. Fetching Trophies...");
-
-    // 1. TRIGGER THE MAIN FETCH
     refreshAllTrophies();
 
-    // 2. Fetch Local Profile Data
     const fetchProfile = async () => {
       try {
         const res = await fetch(`${PROXY_BASE_URL}/api/user/profile/${accountId}`, {
@@ -186,30 +174,28 @@ export default function HomeScreen() {
 
   // --- 5. HELPERS ---
 
-  const showToast = (text: string) => {
+  const showToast = useCallback((text: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToastMsg(text);
     // @ts-ignore
     toastTimer.current = setTimeout(() => setToastMsg(null), 1200);
-  };
+  }, []);
 
-  const togglePin = (id: string) => {
+  const togglePin = useCallback((id: string) => {
     setPinnedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
 
   const applyPinchScale = (scale: number) => {
     let newCols = gridColumns;
-
     const MIN_COLS = 1;
     const MAX_COLS = 4;
 
-    if (scale > 1.2)
-      newCols = Math.max(MIN_COLS, gridColumns - 1); // Zoom in
-    else if (scale < 0.8) newCols = Math.min(MAX_COLS, gridColumns + 1); // Zoom out
+    if (scale > 1.2) newCols = Math.max(MIN_COLS, gridColumns - 1);
+    else if (scale < 0.8) newCols = Math.min(MAX_COLS, gridColumns + 1);
 
     if (newCols !== gridColumns) {
       setGridColumns(newCols);
@@ -220,8 +206,9 @@ export default function HomeScreen() {
 
   const pinchGesture = Gesture.Pinch()
     .enabled(viewMode === "GRID")
+    .runOnJS(true)
     .onEnd((e) => {
-      runOnJS(applyPinchScale)(e.scale);
+      applyPinchScale(e.scale);
     });
 
   // Header Animation
@@ -231,58 +218,64 @@ export default function HomeScreen() {
     outputRange: [0, -totalHeaderHeight],
   });
 
-  // --- 6. RENDER ---
-  const renderItem = ({ item }: { item: any }) => {
-    const isPinned = item.versions.some((v: any) => pinnedIds.has(v.id));
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+    useNativeDriver: true,
+    listener: (e: any) => setShowScrollTop(e.nativeEvent.contentOffset.y > 300),
+  });
 
-    if (viewMode === "GRID") {
+  // --- 6. RENDER ---
+  const renderItem = useCallback(
+    ({ item }: { item: any }) => {
+      const isPinned = item.versions.some((v: any) => pinnedIds.has(v.id));
+
+      if (viewMode === "GRID") {
+        return (
+          <GameGridItem
+            versions={item.versions}
+            numColumns={gridColumns}
+            justUpdated={false}
+            isPinned={isPinned}
+            onPin={() => togglePin(item.id)}
+            isPeeking={activePeekId === item.id}
+            title={item.title}
+            icon={item.icon}
+            heroArt={item.art}
+            onTogglePeek={() =>
+              setActivePeekId((prev) => (prev === item.id ? null : item.id))
+            }
+            sourceMode={ownershipMode}
+          />
+        );
+      }
+
       return (
-        <GameGridItem
-          versions={item.versions}
-          numColumns={gridColumns}
-          justUpdated={false}
-          isPinned={isPinned}
-          onPin={() => togglePin(item.id)}
-          isPeeking={activePeekId === item.id}
+        <GameCard
           title={item.title}
           icon={item.icon}
-          heroArt={item.art}
-          onTogglePeek={() =>
-            setActivePeekId((prev) => (prev === item.id ? null : item.id))
-          }
+          art={item.art}
+          versions={item.versions}
+          isPinned={isPinned}
+          onPin={(id) => togglePin(id)}
           sourceMode={ownershipMode}
         />
       );
-    }
-
-    return (
-      <GameCard
-        title={item.title}
-        icon={item.icon}
-        art={item.art}
-        versions={item.versions}
-        isPinned={isPinned}
-        onPin={(id) => togglePin(id)}
-        sourceMode={ownershipMode}
-      />
-    );
-  };
+    },
+    [viewMode, gridColumns, pinnedIds, activePeekId, ownershipMode, togglePin]
+  );
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#0a0b0fff" }}>
+    <GestureHandlerRootView style={styles.container}>
       {/* HEADER */}
       <Animated.View
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 100,
-          paddingTop: insets.top,
-          backgroundColor: "#0a0b0fff",
-          transform: [{ translateY }],
-          height: totalHeaderHeight,
-        }}
+        style={[
+          styles.headerContainer,
+          {
+            paddingTop: insets.top,
+            // 🟢 FIX 2: Removed "+ 60"
+            height: totalHeaderHeight,
+            transform: [{ translateY }],
+          },
+        ]}
       >
         <HeaderActionBar
           onMenuPress={() => (navigation as any).openDrawer()}
@@ -322,17 +315,11 @@ export default function HomeScreen() {
               await refreshAllTrophies();
               setRefreshing(false);
             }}
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-              {
-                useNativeDriver: true,
-                listener: (e: any) =>
-                  setShowScrollTop(e.nativeEvent.contentOffset.y > 300),
-              }
-            )}
+            onScroll={onScroll}
             contentContainerStyle={{
-              paddingTop: totalHeaderHeight + 10,
-              paddingBottom: 80,
+              ...styles.listContent,
+              // 🟢 FIX 3: Matches Header exactly (+8px breathing room)
+              paddingTop: totalHeaderHeight + 8,
             }}
             ListHeaderComponent={
               userStats ? (
@@ -349,9 +336,7 @@ export default function HomeScreen() {
           />
         </GestureDetector>
       ) : (
-        <Text style={{ color: "red", marginTop: 100, textAlign: "center" }}>
-          ⚠️ No trophy data available.
-        </Text>
+        <Text style={styles.errorText}>⚠️ No trophy data available.</Text>
       )}
 
       {/* TOAST */}

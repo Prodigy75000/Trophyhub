@@ -1,11 +1,19 @@
-// components/LoginModal.tsx
+// src/components/LoginModal.tsx
 import React, { useEffect, useRef } from "react";
-import { ActivityIndicator, Modal, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Modal,
+  StyleSheet, // 🟢 Added StyleSheet
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
-import { styles } from "../styles/SideMenu.styles";
 
-// 🟢 1. CONSTANTS (Clean Configuration)
+// 🔴 REMOVED: import { styles } from "../styles/SideMenu.styles";
+
+// 1. CONSTANTS
 const AUTHORIZE_URL = "https://ca.account.sony.com/api/authz/v3/oauth/authorize";
 const COOKIE_URL = "https://ca.account.sony.com/api/v1/ssocookie";
 const CLIENT_ID = "09515159-7237-4370-9b40-3806e67c0891";
@@ -27,20 +35,19 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
   const hasInjectedRef = useRef(false);
   const targetUrlRef = useRef("");
 
-  // 🟢 2. SETUP ON OPEN
+  // 2. SETUP ON OPEN
   useEffect(() => {
     if (visible) {
       isSwitchingRef.current = false;
       hasInjectedRef.current = false;
 
-      // Build Target URL
       const params = new URLSearchParams({
         response_type: "code",
         client_id: CLIENT_ID,
         scope: SCOPE,
         access_type: "offline",
         service_entity: "urn:service-entity:psn",
-        redirect_uri: REDIRECT_URI, // Encoded automatically by URLSearchParams
+        redirect_uri: REDIRECT_URI,
       });
 
       targetUrlRef.current = `${AUTHORIZE_URL}?${params.toString()}`;
@@ -48,13 +55,11 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
     }
   }, [visible]);
 
-  // 🟢 3. CLEANER SCRIPTS
-  // Parse JSON inside the WebView. Only return if valid.
+  // 3. SCRIPTS
   const READ_COOKIE_SCRIPT = `
     (function() {
       try {
         const t = document.body.innerText;
-        // Check if it looks like JSON before parsing
         if (t.includes("npsso")) {
             const j = JSON.parse(t);
             if (j.npsso) {
@@ -66,7 +71,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
     })();
   `;
 
-  // Only detects specific Sony error text
   const DETECT_ERROR_SCRIPT = `
     (function() {
       const t = document.body ? document.body.innerText : "";
@@ -77,7 +81,7 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
     })();
   `;
 
-  // 🟢 4. LOGIC
+  // 4. LOGIC
   const switchToCookieJar = () => {
     if (!isSwitchingRef.current) {
       console.log("🍪 Switching to Cookie Jar...");
@@ -89,7 +93,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
   };
 
   const handleShouldStartLoad = (request: any) => {
-    // Primary Interceptor
     if (request.url.startsWith("com.scee.psxandroid")) {
       console.log("✅ Redirect Intercepted (ShouldStart)");
       switchToCookieJar();
@@ -101,7 +104,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
   const handleNavigationStateChange = (navState: any) => {
     const url = navState.url;
 
-    // Safety Net: Catch redirect if JS navigation bypassed ShouldStartLoad
     if (url.startsWith("com.scee.psxandroid")) {
       console.log("✅ Redirect Detected (NavState)");
       switchToCookieJar();
@@ -117,7 +119,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
   const handleWebViewMessage = (event: any) => {
     try {
       const json = JSON.parse(event.nativeEvent.data);
-
       if (json.npsso) {
         console.log("✅ NPSSO Captured");
         onSuccess(json.npsso);
@@ -125,7 +126,7 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
         console.log("❌ Detected Sony Error - Consider Reloading");
       }
     } catch (e) {
-      // Ignore non-JSON messages
+      // Ignore
     }
   };
 
@@ -139,6 +140,7 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
       statusBarTranslucent={true}
     >
       <View style={[styles.modalContainer, { paddingTop: insets.top }]}>
+        {/* Header */}
         <View style={styles.modalHeader}>
           <TouchableOpacity
             onPress={onClose}
@@ -150,13 +152,12 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
           <View style={{ width: 50 }} />
         </View>
 
+        {/* WebView */}
         <WebView
           ref={webViewRef}
           key={visible ? "open" : "closed"}
-          // 🟢 CLEAN START: Uses about:blank instead of HTML string
           source={{ uri: "about:blank" }}
           onLoadEnd={(e) => {
-            // 1. Inject Navigation (The Trojan Horse)
             if (!hasInjectedRef.current && targetUrlRef.current) {
               console.log("🚀 Injecting Navigation...");
               hasInjectedRef.current = true;
@@ -164,8 +165,6 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
                 `window.location.replace("${targetUrlRef.current}"); true;`
               );
             }
-
-            // 2. Inject Error Detector (Only on Sony Login pages, NOT Cookie Jar)
             const url = e.nativeEvent.url;
             if (
               !isSwitchingRef.current &&
@@ -187,22 +186,53 @@ export default function LoginModal({ visible, onClose, onSuccess }: LoginModalPr
           style={{ flex: 1, backgroundColor: "black" }}
         />
 
-        {/* Optional: Overlay while switching to make it feel responsive */}
+        {/* Overlay */}
         {isSwitchingRef.current && (
-          <View
-            style={{
-              position: "absolute",
-              top: 100,
-              left: 0,
-              right: 0,
-              alignItems: "center",
-            }}
-          >
+          <View style={styles.loadingOverlay}>
             <ActivityIndicator size="small" color="#4da3ff" />
-            <Text style={{ color: "#4da3ff", marginTop: 10 }}>Finishing login...</Text>
+            <Text style={styles.loadingText}>Finishing login...</Text>
           </View>
         )}
       </View>
     </Modal>
   );
 }
+
+// 🟢 5. LOCAL STYLES (Fixes the missing property errors)
+const styles = StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#101010",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 15,
+    borderBottomWidth: 1,
+    borderColor: "#333",
+    backgroundColor: "#151b2b",
+  },
+  modalTitle: {
+    color: "white",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  modalClose: {
+    color: "#4da3ff",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  loadingOverlay: {
+    position: "absolute",
+    top: 100,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  loadingText: {
+    color: "#4da3ff",
+    marginTop: 10,
+    fontWeight: "600",
+  },
+});

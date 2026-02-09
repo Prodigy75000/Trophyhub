@@ -1,7 +1,37 @@
+// src/styles/GameGridItem.styles.ts
 import { StyleSheet } from "react-native";
 
 export const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.1)" },
+  // 🟢 NEW: Main Grid Container
+  gridItemContainer: {
+    padding: 0.5,
+  },
+  pressable: {
+    flex: 1,
+  },
+
+  // 🟢 NEW: The Square Card Content
+  cardContent: {
+    flex: 1,
+    borderRadius: 0,
+    overflow: "hidden",
+    backgroundColor: "#000",
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 0, // Default, override with style prop for updates
+  },
+
+  // 🟢 NEW: Image Styles
+  image: {
+    width: "100%",
+    height: "100%",
+  },
+
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.1)",
+  },
 
   titleBadge: {
     position: "absolute",
@@ -34,7 +64,13 @@ export const styles = StyleSheet.create({
   versionBadge: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
   versionActive: { backgroundColor: "#4da3ff" },
   versionInactive: { backgroundColor: "transparent" },
-  versionText: { fontSize: 9, fontWeight: "bold", textTransform: "uppercase" },
+  versionText: {
+    fontSize: 9,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    color: "#888",
+  },
+  versionTextActive: { color: "white" },
 
   progressContainer: {
     position: "absolute",
@@ -45,6 +81,7 @@ export const styles = StyleSheet.create({
     padding: 1,
   },
 
+  // --- Peek Overlay (Quick View) ---
   peekOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.9)",
@@ -52,10 +89,33 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 99,
   },
-  peekContent: { gap: 4, alignItems: "flex-start" },
-  peekRow: { flexDirection: "row", alignItems: "center" },
-  peekIcon: { width: 16, height: 16, marginRight: 6 },
-  peekText: { fontSize: 12, fontWeight: "600" },
+  peekContent: {
+    gap: 4,
+    alignItems: "flex-start",
+  },
+  peekRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  peekIcon: {
+    width: 16,
+    height: 16,
+    marginRight: 6,
+  },
+  peekTextContainer: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  peekEarned: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 12,
+  },
+  peekTotal: {
+    color: "#aaa",
+    fontSize: 12,
+    fontWeight: "600",
+  },
 
   pinButton: {
     position: "absolute",

@@ -46,4 +46,5 @@ export type TrophyContextType = {
     xsts: string;
     hash: string;
   }) => Promise<void>;
+  logoutXbox: () => Promise<void>;
 };

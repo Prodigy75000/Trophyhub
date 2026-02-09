@@ -5,13 +5,15 @@ import {
   ActivityIndicator,
   Modal,
   StatusBar,
-  StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
+
+// Styles
+import { styles } from "../../styles/SmartGuideModal.styles";
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -29,48 +31,33 @@ type SmartGuideProps = {
 // CONFIGURATION
 // ---------------------------------------------------------------------------
 
-/**
- * The "Harmonizer" Script
- * Injects CSS to force dark mode and hide clutter/ads on 3rd party sites.
- */
 const DARK_MODE_INJECTION = `
   (function() {
     try {
-      // 1. Force Dark Background
       const darkColor = '#151b2b';
       document.documentElement.style.backgroundColor = darkColor;
       document.body.style.backgroundColor = darkColor;
 
       const style = document.createElement('style');
       style.innerHTML = \`
-        /* Global Override */
         body, html { background-color: #151b2b !important; color: white !important; }
-        
-        /* YouTube Mobile Cleanup */
         .mobile-topbar-header, ytm-mobile-topbar-renderer { 
           background-color: #151b2b !important; 
           border-bottom: 1px solid #2a3449 !important;
         }
         .mobile-topbar-header-content .search-mode .placeholder { color: #888 !important; }
-        
-        /* Hide Annoyances (Open App banners, cookie popups) */
         .upsell-dialog-renderer, .big-yoodle, .smart-app-banner, .promotion { display: none !important; }
         #cookie-banner, #onetrust-banner-sdk { display: none !important; }
-        
-        /* Hide Ads */
         .adsbygoogle, .ad-banner, [id^="google_ads"] { display: none !important; }
-        
-        /* PSNProfiles Specifics */
         #header, #footer { display: none !important; }
         .box.no-top-border { display: none !important; }
       \`;
       document.head.appendChild(style);
     } catch (e) { console.error("Injection failed", e); }
   })();
-  true; // Required for WebView
+  true;
 `;
 
-// Force Android Dark Mode User Agent
 const USER_AGENT =
   "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36";
 
@@ -88,21 +75,20 @@ export default function SmartGuideModal({
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
 
-  // Memoize URL generation to prevent flicker on re-renders
+  // Memoize URL generation
   const targetUrl = useMemo(() => {
     if (!mode) return "";
 
-    // Sanitize inputs
     const safeGame = encodeURIComponent(gameName);
-    const safeTrophy = encodeURIComponent(`"${trophyName}"`); // Quotes for exact match
+    // Add quotes for stricter search matches on trophy names
+    const safeTrophy = encodeURIComponent(`"${trophyName}"`);
 
     if (mode === "VIDEO") {
       return `https://m.youtube.com/results?search_query=${safeGame}+${safeTrophy}+trophy+guide`;
     }
+    // Default to PSNProfiles google search
     return `https://www.google.com/search?q=${safeGame}+${safeTrophy}+trophy+guide+psnprofiles`;
   }, [gameName, trophyName, mode]);
-
-  if (!mode) return null;
 
   return (
     <Modal
@@ -112,8 +98,7 @@ export default function SmartGuideModal({
       onRequestClose={onClose}
       statusBarTranslucent={true}
     >
-      {/* GLOBAL CONTAINER: Matches App Theme (#151b2b) */}
-      <View style={[styles.container, { backgroundColor: "#151b2b" }]}>
+      <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#151b2b" />
 
         {/* HEADER */}
@@ -138,68 +123,23 @@ export default function SmartGuideModal({
         </View>
 
         {/* WEBVIEW */}
-        <WebView
-          source={{ uri: targetUrl }}
-          style={styles.webview}
-          containerStyle={styles.webviewContainer}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          injectedJavaScript={DARK_MODE_INJECTION}
-          onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
-          userAgent={USER_AGENT}
-          // Performance props
-          startInLoadingState={false}
-          showsVerticalScrollIndicator={false}
-        />
+        {targetUrl ? (
+          <WebView
+            source={{ uri: targetUrl }}
+            style={styles.webview}
+            containerStyle={styles.webviewContainer}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            injectedJavaScript={DARK_MODE_INJECTION}
+            onLoadStart={() => setLoading(true)}
+            onLoadEnd={() => setLoading(false)}
+            userAgent={USER_AGENT}
+            startInLoadingState={false}
+            showsVerticalScrollIndicator={false}
+            originWhitelist={["*"]} // 🟢 Important for navigation
+          />
+        ) : null}
       </View>
     </Modal>
   );
 }
-
-// ---------------------------------------------------------------------------
-// STYLES
-// ---------------------------------------------------------------------------
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#2a3449",
-    backgroundColor: "#151b2b",
-    height: 60, // Fixed height for consistency
-  },
-  closeBtn: {
-    padding: 4,
-    marginRight: 12,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  headerTitle: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  headerSubtitle: {
-    color: "#888",
-    fontSize: 12,
-  },
-  loaderContainer: {
-    width: 40,
-    alignItems: "center",
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: "#151b2b",
-  },
-  webviewContainer: {
-    backgroundColor: "#151b2b",
-  },
-});

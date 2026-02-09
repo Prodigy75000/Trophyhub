@@ -1,18 +1,20 @@
+// src/components/trophies/GameGridItem.tsx
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
   Image,
+  ImageSourcePropType,
   Pressable,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { styles } from "../../styles/GameGridItem.styles";
+import { GameVersion } from "../../types/GameTypes"; // 🟢 Correct Type Import
 import ProgressCircle from "../ProgressCircle";
-import { GameVersion } from "./GameCard";
 
 const trophyIcons = {
   bronze: require("../../../assets/icons/trophies/bronze.png"),
@@ -21,11 +23,22 @@ const trophyIcons = {
   platinum: require("../../../assets/icons/trophies/platinum.png"),
 };
 
+// 🟢 EXTENDED TYPE: Local UI version with optional masterStats
+type UI_GameVersion = GameVersion & {
+  masterStats?: {
+    bronze: number;
+    silver: number;
+    gold: number;
+    platinum: number;
+    total: number;
+  };
+};
+
 type Props = {
   title: string;
   icon: string;
   heroArt?: string;
-  versions: GameVersion[];
+  versions: UI_GameVersion[];
   numColumns: number;
   justUpdated?: boolean;
   isPinned?: boolean;
@@ -35,6 +48,31 @@ type Props = {
   sourceMode?: "OWNED" | "GLOBAL" | "UNOWNED";
 };
 
+// ---------------------------------------------------------------------------
+// SUB-COMPONENT: Peek Row
+// ---------------------------------------------------------------------------
+const PeekRowComponent = ({
+  icon,
+  earned,
+  total,
+}: {
+  icon: ImageSourcePropType;
+  earned: number;
+  total: number;
+}) => (
+  <View style={styles.peekRow}>
+    <Image source={icon} style={styles.peekIcon} resizeMode="contain" />
+    <View style={styles.peekTextContainer}>
+      <Text style={styles.peekEarned}>{earned}</Text>
+      <Text style={styles.peekTotal}>/{total}</Text>
+    </View>
+  </View>
+);
+const PeekRow = memo(PeekRowComponent);
+
+// ---------------------------------------------------------------------------
+// MAIN COMPONENT
+// ---------------------------------------------------------------------------
 const GameGridItem = ({
   title,
   icon,
@@ -53,25 +91,36 @@ const GameGridItem = ({
 
   // --- Smart Grouping ---
   const groupedVersions = useMemo(() => {
-    const groups: Record<string, GameVersion[]> = {};
+    const groups: Record<string, UI_GameVersion[]> = {};
     if (!versions) return {};
     versions.forEach((v) => {
       if (!groups[v.platform]) groups[v.platform] = [];
       groups[v.platform].push(v);
     });
+    // Sort versions inside platforms by progress (optional)
     Object.keys(groups).forEach((plat) => {
       groups[plat].sort((a, b) => b.progress - a.progress);
     });
     return groups;
   }, [versions]);
 
-  const uniquePlatforms = Object.keys(groupedVersions).sort((a, b) => {
-    if (a === "PS5") return -1;
-    if (b === "PS5") return 1;
-    return 0;
-  });
+  const uniquePlatforms = useMemo(() => {
+    return Object.keys(groupedVersions).sort((a, b) => {
+      if (a === "PS5") return -1;
+      if (b === "PS5") return 1;
+      return 0;
+    });
+  }, [groupedVersions]);
 
   const [activePlatform, setActivePlatform] = useState(uniquePlatforms[0] || "PS4");
+
+  // Update active platform if uniquePlatforms changes (e.g. filter change)
+  useEffect(() => {
+    if (!uniquePlatforms.includes(activePlatform) && uniquePlatforms.length > 0) {
+      setActivePlatform(uniquePlatforms[0]);
+    }
+  }, [uniquePlatforms]);
+
   const activeVer = groupedVersions[activePlatform]?.[0] || versions[0];
 
   const handlePlatformPress = (e: any, plat: string) => {
@@ -79,25 +128,33 @@ const GameGridItem = ({
     setActivePlatform(plat);
   };
 
-  const lastTapRef = useRef<number>(0);
+  // Dimensions
   const screenWidth = Dimensions.get("window").width;
   const size = screenWidth / numColumns;
 
   const isPS5 = activeVer?.platform === "PS5";
   const dynamicResizeMode = "contain";
 
-  // 🟢 HELPER: Use User Data if available, otherwise Master Stats
-  const getCount = (key: keyof typeof activeVer.counts) => {
-    // @ts-ignore
+  // Helper: Use User Data if available, otherwise Master Stats
+  const getCount = (key: "bronze" | "silver" | "gold" | "platinum") => {
     return activeVer.counts[key] || activeVer.masterStats?.[key] || 0;
   };
 
+  // Animation Logic
   useEffect(() => {
     if (justUpdated) {
       Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: false,
+        }),
         Animated.delay(2000),
-        Animated.timing(glowAnim, { toValue: 0, duration: 1000, useNativeDriver: false }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: false,
+        }),
       ]).start();
     }
   }, [justUpdated, glowAnim]);
@@ -107,16 +164,21 @@ const GameGridItem = ({
     outputRange: ["rgba(0,0,0,0)", "rgba(255, 215, 0, 1)"],
   });
 
+  // Interaction Logic
+  const lastTapRef = useRef<number>(0);
   const handlePress = () => {
     const now = Date.now();
-    const DOUBLE_TAP_DELAY = 800;
+    const DOUBLE_TAP_DELAY = 800; //ms
+
     if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      // Double Tap -> Navigate
       router.push({
         pathname: "/game/[id]",
         params: { id: activeVer.id, artParam: heroArt || icon, contextMode: sourceMode },
       });
       lastTapRef.current = 0;
     } else {
+      // Single Tap -> Peek (Toggle Overlay)
       if (onTogglePeek) onTogglePeek();
       lastTapRef.current = now;
     }
@@ -125,27 +187,26 @@ const GameGridItem = ({
   if (!activeVer) return null;
 
   return (
-    <View style={{ width: size, height: size, padding: 0.5 }}>
+    <View style={[styles.gridItemContainer, { width: size, height: size }]}>
       <Pressable
         onPress={handlePress}
-        style={({ pressed }) => ({ flex: 1, transform: [{ scale: pressed ? 0.98 : 1 }] })}
+        style={({ pressed }) => [
+          styles.pressable,
+          { transform: [{ scale: pressed ? 0.98 : 1 }] },
+        ]}
       >
         <Animated.View
-          style={{
-            flex: 1,
-            borderRadius: 0,
-            overflow: "hidden",
-            backgroundColor: "#000",
-            position: "relative",
-            justifyContent: "center",
-            alignItems: "center",
-            borderWidth: justUpdated ? 2 : 0,
-            borderColor,
-          }}
+          style={[
+            styles.cardContent,
+            {
+              borderWidth: justUpdated ? 2 : 0,
+              borderColor,
+            },
+          ]}
         >
           <Image
             source={{ uri: icon }}
-            style={{ width: "100%", height: "100%" }}
+            style={styles.image}
             resizeMode={dynamicResizeMode}
           />
 
@@ -162,29 +223,29 @@ const GameGridItem = ({
           {isPeeking && (
             <View style={styles.peekOverlay}>
               <View style={styles.peekContent}>
-                {/* 🟢 UPDATED: Check for Platinum via helper or Master Stats */}
+                {/* Show Platinum only if it exists */}
                 {(activeVer.counts.platinum > 0 ||
                   (activeVer.masterStats?.platinum ?? 0) > 0) && (
                   <PeekRow
                     icon={trophyIcons.platinum}
                     earned={activeVer.counts.earnedPlatinum}
-                    total={getCount("platinum")} // 🟢 Use Helper
+                    total={getCount("platinum")}
                   />
                 )}
                 <PeekRow
                   icon={trophyIcons.gold}
                   earned={activeVer.counts.earnedGold}
-                  total={getCount("gold")} // 🟢 Use Helper
+                  total={getCount("gold")}
                 />
                 <PeekRow
                   icon={trophyIcons.silver}
                   earned={activeVer.counts.earnedSilver}
-                  total={getCount("silver")} // 🟢 Use Helper
+                  total={getCount("silver")}
                 />
                 <PeekRow
                   icon={trophyIcons.bronze}
                   earned={activeVer.counts.earnedBronze}
-                  total={getCount("bronze")} // 🟢 Use Helper
+                  total={getCount("bronze")}
                 />
               </View>
             </View>
@@ -204,10 +265,7 @@ const GameGridItem = ({
                     onPress={(e) => handlePlatformPress(e, plat)}
                   >
                     <Text
-                      style={[
-                        styles.versionText,
-                        isActive ? { color: "white" } : { color: "#888" },
-                      ]}
+                      style={[styles.versionText, isActive && styles.versionTextActive]}
                     >
                       {plat}
                     </Text>
@@ -241,15 +299,5 @@ const GameGridItem = ({
     </View>
   );
 };
-
-const PeekRow = ({ icon, earned, total }: any) => (
-  <View style={styles.peekRow}>
-    <Image source={icon} style={styles.peekIcon} resizeMode="contain" />
-    <Text style={styles.peekText}>
-      <Text style={{ color: "#fff", fontWeight: "bold" }}>{earned}</Text>
-      <Text style={{ color: "#aaa" }}>/{total}</Text>
-    </Text>
-  </View>
-);
 
 export default React.memo(GameGridItem);

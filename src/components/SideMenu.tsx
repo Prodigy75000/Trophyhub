@@ -1,4 +1,4 @@
-// components/SideMenu.tsx
+// src/components/SideMenu.tsx
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -7,56 +7,100 @@ import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from "react-na
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTrophy } from "../../providers/TrophyContext";
-import { usePsnAuth } from "../hooks/auth/usePsnAuth"; // 🟢 New Hook
-import { useXboxAuth } from "../hooks/auth/useXboxAuth"; // 🟢 New Hook
-import { styles } from "../styles/SideMenu.styles"; // 🟢 Correct Path
+import { usePsnAuth } from "../hooks/auth/usePsnAuth";
+import { styles } from "../styles/SideMenu.styles";
 import LoginModal from "./LoginModal";
+import XboxLoginButton from "./XboxLoginButton";
 
 export default function SideMenu() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Context Data
-  const { user, logout, accountId } = useTrophy();
+  // 1. GET GLOBAL DATA (PSN + Xbox)
+  const {
+    user, // PSN User Object
+    accountId, // PSN Account ID
+    logout, // PSN Logout
+    handleXboxLogin, // Xbox Login Handler
+    xboxProfile, // Xbox User Object
+    logoutXbox, // Xbox Logout
+  } = useTrophy();
 
-  // Auth Hooks
-  const { login: loginXbox } = useXboxAuth();
+  // 2. PSN AUTH UI HANDLERS
   const { showLoginModal, setShowLoginModal, loginGuest, onLoginSuccess } = usePsnAuth();
 
-  const handleLogout = () => {
-    Alert.alert("Sign Out", "Are you sure you want to disconnect?", [
+  // Helpers
+  const isPsnLoggedIn = !!(user || accountId);
+  const isXboxLoggedIn = !!xboxProfile;
+
+  // --- 🟢 FIX 1: RESTORE USERNAME & AVATAR ---
+  // If 'user' (profile) isn't loaded yet, fallback to 'accountId' so we don't show "Guest"
+  const psnName = user?.onlineId ?? accountId ?? "Guest Player";
+  const psnAvatar = user?.avatarUrl ?? "https://i.imgur.com/6Cklq5z.png";
+  const psnLevel = user?.trophyLevel ?? 1;
+
+  // Xbox Data Fallbacks
+  const xboxGamertag = xboxProfile?.gamertag ?? "Xbox Player";
+  const xboxPic = xboxProfile?.gamerpic ?? null;
+
+  // Handlers
+  const handlePsnLogout = () => {
+    Alert.alert("Sign Out PSN", "Disconnect from PlayStation Network?", [
       { text: "Cancel", style: "cancel" },
       { text: "Sign Out", style: "destructive", onPress: logout },
     ]);
   };
 
-  const navigateHome = () => router.navigate("/");
+  const handleXboxLogout = () => {
+    Alert.alert("Sign Out Xbox", "Disconnect from Xbox Live?", [
+      { text: "Cancel", style: "cancel" },
+      // Check if logoutXbox exists before calling it
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: () => logoutXbox && logoutXbox(),
+      },
+    ]);
+  };
 
-  // UI Helpers
-  const avatarUrl = user?.avatarUrl ?? "https://i.imgur.com/6Cklq5z.png";
-  const username = user?.onlineId ?? "Guest Player";
-  const level = user?.trophyLevel ?? 1;
-  const isLoggedIn = !!(user || accountId);
+  const navigateHome = () => router.navigate("/");
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
+      {/* HEADER: PSN PROFILE (Primary) */}
       <LinearGradient
         colors={["#1e2535", "#0a0b0f"]}
         style={[styles.header, { paddingTop: insets.top + 20 }]}
       >
         <View style={styles.profileRow}>
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            <Image source={{ uri: psnAvatar }} style={styles.avatar} />
+            {/* Small Xbox Badge if both connected */}
+            {isXboxLoggedIn && (
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: -4,
+                  right: -4,
+                  backgroundColor: "#107c10",
+                  borderRadius: 10,
+                  padding: 2,
+                  borderWidth: 2,
+                  borderColor: "#000",
+                }}
+              >
+                <MaterialCommunityIcons name="microsoft-xbox" size={12} color="white" />
+              </View>
+            )}
           </View>
           <View style={styles.userInfo}>
             <Text style={styles.username} numberOfLines={1}>
-              {username}
+              {psnName}
             </Text>
-            {isLoggedIn ? (
+            {isPsnLoggedIn ? (
               <View style={styles.levelBadge}>
                 <MaterialCommunityIcons name="star" size={12} color="#ffd700" />
-                <Text style={styles.levelText}>Level {level}</Text>
+                <Text style={styles.levelText}>Level {psnLevel}</Text>
               </View>
             ) : (
               <Text style={styles.guestText}>Not synced</Text>
@@ -64,64 +108,108 @@ export default function SideMenu() {
           </View>
         </View>
 
-        {/* AUTH BUTTONS */}
-        {isLoggedIn ? (
-          <TouchableOpacity
-            style={styles.signOutButton}
-            onPress={handleLogout}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons
-              name="logout"
-              size={20}
-              color="#ff8a80"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.signOutText}>Sign Out of PSN</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={{ gap: 10 }}>
+        {/* --- AUTH ACTIONS (Independent) --- */}
+        <View style={styles.authButtonsContainer}>
+          {/* 1. PSN ACTIONS */}
+          {isPsnLoggedIn ? (
             <TouchableOpacity
-              style={styles.webButton}
-              onPress={() => setShowLoginModal(true)}
+              style={styles.signOutButton}
+              onPress={handlePsnLogout}
               activeOpacity={0.8}
             >
               <MaterialCommunityIcons
-                name="sony-playstation"
+                name="logout"
                 size={20}
-                color="white"
-                style={{ marginRight: 8 }}
+                color="#ff8a80"
+                style={styles.buttonIcon}
               />
-              <Text style={styles.webButtonText}>Sign In with PSN</Text>
+              <Text style={styles.signOutText}>Sign Out PSN</Text>
             </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.webButton}
+                onPress={() => setShowLoginModal(true)}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons
+                  name="sony-playstation"
+                  size={20}
+                  color="white"
+                  style={styles.buttonIcon}
+                />
+                <Text style={styles.webButtonText}>Sign In with PSN</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.guestButton}
+                onPress={loginGuest}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="people-outline"
+                  size={20}
+                  color="#888"
+                  style={styles.buttonIcon}
+                />
+                <Text style={styles.guestButtonText}>Guest Mode</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* 2. XBOX ACTIONS */}
+          {isXboxLoggedIn ? (
             <TouchableOpacity
-              style={styles.guestButton}
-              onPress={loginGuest}
+              style={[
+                styles.xboxButton,
+                { backgroundColor: "rgba(16, 124, 16, 0.15)", borderColor: "#107c10" },
+              ]}
+              onPress={handleXboxLogout}
               activeOpacity={0.8}
             >
-              <Ionicons
-                name="people-outline"
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                {xboxPic ? (
+                  <Image
+                    source={{ uri: xboxPic }}
+                    style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8 }}
+                  />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="microsoft-xbox"
+                    size={20}
+                    color="#107c10"
+                    style={styles.buttonIcon}
+                  />
+                )}
+                <Text style={[styles.xboxButtonText, { color: "#107c10" }]}>
+                  {xboxGamertag}
+                </Text>
+              </View>
+              <MaterialCommunityIcons
+                name="close-circle-outline"
                 size={20}
-                color="#888"
-                style={{ marginRight: 8 }}
+                color="#107c10"
               />
-              <Text style={styles.guestButtonText}>Continue as Guest</Text>
             </TouchableOpacity>
-          </View>
-        )}
+          ) : (
+            // 🟢 Xbox Login Button (Always visible if not logged in)
+            <XboxLoginButton onSuccess={handleXboxLogin} />
+          )}
+        </View>
       </LinearGradient>
 
+      {/* LOGIN MODAL (Hidden logic) */}
       <LoginModal
         visible={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         onSuccess={onLoginSuccess}
       />
 
-      {/* MENU LIST */}
+      {/* MENU NAVIGATION */}
       <ScrollView contentContainerStyle={styles.menuItems}>
         <Text style={styles.sectionLabel}>Menu</Text>
         <TouchableOpacity style={styles.menuRow} onPress={navigateHome}>
-          <View style={[styles.iconBox, { backgroundColor: "rgba(77, 163, 255, 0.1)" }]}>
+          <View style={[styles.iconBox, styles.iconBoxHome]}>
             <Ionicons name="home" size={20} color="#4da3ff" />
           </View>
           <Text style={styles.menuText}>Home</Text>
@@ -130,12 +218,10 @@ export default function SideMenu() {
         <View style={styles.divider} />
         <Text style={styles.sectionLabel}>Settings</Text>
         <TouchableOpacity style={styles.menuRow} activeOpacity={0.5}>
-          <View
-            style={[styles.iconBox, { backgroundColor: "rgba(255, 255, 255, 0.05)" }]}
-          >
+          <View style={[styles.iconBox, styles.iconBoxSettings]}>
             <Ionicons name="settings-outline" size={20} color="#888" />
           </View>
-          <Text style={[styles.menuText, { color: "#888" }]}>App Preferences</Text>
+          <Text style={[styles.menuText, styles.menuTextInactive]}>App Preferences</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -143,18 +229,6 @@ export default function SideMenu() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
         <View style={styles.footerRow}>
           <Text style={styles.versionText}>TrophyHub v0.9 (Beta)</Text>
-          <View style={styles.devActions}>
-            <TouchableOpacity style={styles.devButtonPSN} onPress={loginGuest}>
-              <Ionicons name="flash" size={12} color="#4da3ff" />
-              <Text style={styles.devTextPSN}>PSN</Text>
-            </TouchableOpacity>
-
-            {/* 🟢 CLEAN XBOX BUTTON CALL */}
-            <TouchableOpacity style={styles.devButtonXbox} onPress={loginXbox}>
-              <Ionicons name="flash" size={12} color="#107c10" />
-              <Text style={styles.devTextXbox}>Xbox</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </View>
     </View>

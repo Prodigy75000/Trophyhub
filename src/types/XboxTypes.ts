@@ -1,8 +1,9 @@
+// src/types/XboxTypes.ts
 export interface XboxTitle {
-  titleId: string; // The unique ID
+  titleId: string;
   name: string;
-  displayImage: string; // Box Art URL
-  devices: string[]; // ["XboxOne", "SeriesX"]
+  displayImage: string;
+  devices: string[];
   achievement: {
     currentAchievements: number;
     totalAchievements: number;
@@ -10,7 +11,7 @@ export interface XboxTitle {
     totalGamerscore: number;
     progressPercentage: number;
   };
-  lastUnlock: string; // ISO Date String
+  lastUnlock: string;
 }
 
 export interface XboxProfile {

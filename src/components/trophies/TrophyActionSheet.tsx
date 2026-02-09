@@ -1,7 +1,7 @@
 // components/trophies/TrophyActionSheet.tsx
 import { Ionicons } from "@expo/vector-icons";
 import React, { memo, useState } from "react";
-import { Image, Linking, Modal, Pressable, Text, View } from "react-native";
+import { Image, Linking, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Components & Utils
@@ -26,6 +26,7 @@ type ActionSheetProps = {
   description: string;
 };
 
+// Use explicit Require to avoid dynamic require issues
 const TROPHY_ICONS: Record<string, any> = {
   bronze: require("../../../assets/icons/trophies/bronze.png"),
   silver: require("../../../assets/icons/trophies/silver.png"),
@@ -51,12 +52,19 @@ type ActionButtonProps = {
   onPress: () => void;
 };
 
-const ActionButton = ({ iconName, color, label, onPress }: ActionButtonProps) => (
+const ActionButtonComponent = ({
+  iconName,
+  color,
+  label,
+  onPress,
+}: ActionButtonProps) => (
   <Pressable
     onPress={onPress}
     style={({ pressed }) => [
       styles.actionBtn,
-      { backgroundColor: pressed ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.05)" },
+      {
+        backgroundColor: pressed ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.05)",
+      },
     ]}
   >
     <View style={[styles.actionIconCircle, { backgroundColor: `${color}20` }]}>
@@ -65,6 +73,8 @@ const ActionButton = ({ iconName, color, label, onPress }: ActionButtonProps) =>
     <Text style={styles.actionLabel}>{label}</Text>
   </Pressable>
 );
+
+const ActionButton = memo(ActionButtonComponent);
 
 // ---------------------------------------------------------------------------
 // MAIN COMPONENT
@@ -86,8 +96,15 @@ function TrophyActionSheet({
   } | null>(null);
 
   // --- Handlers ---
-  const handleWatchGuide = () => setActiveGuide({ mode: "VIDEO" });
-  const handleReadGuide = () => setActiveGuide({ mode: "GUIDE" });
+  const handleWatchGuide = () => {
+    // 🟢 Temporarily close sheet to show guide modal (optional UX choice)
+    // onClose();
+    setActiveGuide({ mode: "VIDEO" });
+  };
+
+  const handleReadGuide = () => {
+    setActiveGuide({ mode: "GUIDE" });
+  };
 
   const handleGoogleSearch = () => {
     const query = encodeURIComponent(`${gameName} ${trophyName} trophy guide`);
@@ -106,6 +123,7 @@ function TrophyActionSheet({
 
   return (
     <>
+      {/* 1. Guide Modal (Shows on top of everything) */}
       <SmartGuideModal
         visible={!!activeGuide}
         onClose={() => setActiveGuide(null)}
@@ -114,6 +132,7 @@ function TrophyActionSheet({
         mode={activeGuide?.mode ?? null}
       />
 
+      {/* 2. The Action Sheet Modal */}
       <Modal
         transparent
         animationType="fade"
@@ -122,12 +141,13 @@ function TrophyActionSheet({
         statusBarTranslucent
       >
         <View style={styles.overlay}>
-          <Pressable onPress={onClose} style={styles.overlay} />
+          {/* Tap outside to close */}
+          <Pressable onPress={onClose} style={StyleSheet.absoluteFill} />
 
           <View style={[styles.sheetContainer, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.dragHandle} />
 
-            {/* HEADER */}
+            {/* HEADER ROW */}
             <View style={styles.headerRow}>
               {/* Left: Large Square Art */}
               <View style={[styles.largeIconContainer, { borderColor: rankColor }]}>
@@ -136,25 +156,23 @@ function TrophyActionSheet({
 
               {/* Right: Info Column */}
               <View style={styles.headerTextCol}>
-                {/* 🟢 Title Row: Rarity Icon + Trophy Name */}
                 <View style={styles.titleRow}>
                   <Image
                     source={rankIcon}
                     style={styles.rarityIcon}
                     resizeMode="contain"
                   />
-                  {/* 1. Title Row (Icon + Name) */}
                   <Text style={styles.trophyTitle} numberOfLines={2}>
                     {trophyName}
                   </Text>
                 </View>
-                {/* 🟢 2. MOVED: Description (Sits below title now) */}
+
                 <Text style={styles.description}>{description}</Text>
-                {/* 3. Game Title */}
+
                 <Text style={styles.gameTitle} numberOfLines={1}>
                   {gameName}
                 </Text>
-                {/* 4. Extra Details (Optional) */}
+
                 {trophyDetail ? (
                   <Text style={styles.trophyDesc} numberOfLines={2}>
                     {trophyDetail}
@@ -163,7 +181,7 @@ function TrophyActionSheet({
               </View>
             </View>
 
-            {/* ACTIONS */}
+            {/* ACTIONS GRID */}
             <View style={styles.actionsGrid}>
               <ActionButton
                 iconName="logo-youtube"

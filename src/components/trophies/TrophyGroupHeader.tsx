@@ -1,14 +1,10 @@
 // components/trophies/TrophyGroupHeader.tsx
 import { Ionicons } from "@expo/vector-icons";
 import React, { memo } from "react";
-import {
-  Image,
-  ImageSourcePropType,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Image, ImageSourcePropType, Text, TouchableOpacity, View } from "react-native";
+
+// Styles
+import { styles } from "../../styles/TrophyGroupHeader.styles"; // Adjust path if needed
 
 // ---------------------------------------------------------------------------
 // ASSETS & TYPES
@@ -49,7 +45,8 @@ type StatProps = {
   total: number;
 };
 
-const Stat = ({ icon, earned, total }: StatProps) => (
+// Defined as a named function for better debugging/linting
+const StatItem = ({ icon, earned, total }: StatProps) => (
   <View style={styles.statContainer}>
     <Image source={icon} style={styles.statIcon} resizeMode="contain" />
     <Text style={styles.statText}>
@@ -62,7 +59,7 @@ const Stat = ({ icon, earned, total }: StatProps) => (
 // MAIN COMPONENT
 // ---------------------------------------------------------------------------
 
-function TrophyGroupHeader({
+const TrophyGroupHeaderComponent = ({
   title,
   isBaseGame,
   counts,
@@ -70,7 +67,7 @@ function TrophyGroupHeader({
   progress,
   collapsed,
   onToggle,
-}: Props) {
+}: Props) => {
   // 1. Calculate Totals
   const totalCount = counts.bronze + counts.silver + counts.gold + counts.platinum;
   const earnedCount =
@@ -119,13 +116,20 @@ function TrophyGroupHeader({
       </View>
 
       {/* BOTTOM ROW: Stats Summary */}
-      {/* We keep this visible even when collapsed for quick info access */}
       <View style={styles.statsRow}>
-        <Stat icon={ICONS.bronze} earned={earnedCounts.bronze} total={counts.bronze} />
-        <Stat icon={ICONS.silver} earned={earnedCounts.silver} total={counts.silver} />
-        <Stat icon={ICONS.gold} earned={earnedCounts.gold} total={counts.gold} />
+        <StatItem
+          icon={ICONS.bronze}
+          earned={earnedCounts.bronze}
+          total={counts.bronze}
+        />
+        <StatItem
+          icon={ICONS.silver}
+          earned={earnedCounts.silver}
+          total={counts.silver}
+        />
+        <StatItem icon={ICONS.gold} earned={earnedCounts.gold} total={counts.gold} />
         {counts.platinum > 0 && (
-          <Stat
+          <StatItem
             icon={ICONS.platinum}
             earned={earnedCounts.platinum}
             total={counts.platinum}
@@ -134,103 +138,7 @@ function TrophyGroupHeader({
       </View>
     </TouchableOpacity>
   );
-}
+};
 
-export default memo(TrophyGroupHeader);
-
-// ---------------------------------------------------------------------------
-// STYLES
-// ---------------------------------------------------------------------------
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: "#151b2b",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: "#4da3ff",
-    borderRadius: 4,
-    // Optional: Add subtle shadow for depth
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  titleWrapper: {
-    flex: 1,
-    marginRight: 10,
-  },
-  rightSide: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  title: {
-    color: "#ddd", // Slightly softer white for DLCs
-    fontSize: 15,
-    fontWeight: "bold",
-  },
-  baseGameTitle: {
-    fontSize: 17,
-    color: "#fff", // Bright white for Base Game
-  },
-  subtitle: {
-    color: "#666",
-    fontSize: 11,
-    marginTop: 4,
-    fontWeight: "500",
-  },
-  statsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  // Stat Item Styles
-  statContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 16,
-  },
-  statIcon: {
-    width: 14,
-    height: 14,
-    marginRight: 6,
-  },
-  statText: {
-    color: "#666", // Total count color
-    fontSize: 12,
-  },
-  statEarned: {
-    color: "#ccc", // Earned count color (brighter)
-    fontWeight: "600",
-  },
-  // Badge Styles
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: "#2a3449",
-    minWidth: 40,
-    alignItems: "center",
-  },
-  completedBadge: {
-    backgroundColor: "#4caf50",
-  },
-  badgeText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  completedText: {
-    color: "#000",
-  },
-});
+// Export memoized component
+export default memo(TrophyGroupHeaderComponent);

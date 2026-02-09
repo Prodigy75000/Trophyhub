@@ -2,6 +2,45 @@
 import { StyleSheet } from "react-native";
 
 export const styles = StyleSheet.create({
+  // Root
+  container: {
+    flex: 1,
+    backgroundColor: "#0a0b0f",
+  },
+
+  // Header (Animated)
+  headerContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    backgroundColor: "#0a0b0f",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
+  },
+
+  // List
+  listContent: {
+    paddingBottom: 80,
+    paddingHorizontal: 0,
+  },
+
+  // States
+  errorText: {
+    color: "#ff4444",
+    marginTop: 100,
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  loadingText: {
+    color: "#888",
+    marginTop: 100,
+    textAlign: "center",
+  },
+
+  // UI Elements
   fab: {
     position: "absolute",
     bottom: 24,

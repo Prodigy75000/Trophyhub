@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { GameVersion } from "../../types/GameTypes"; // 🟢 Import Global Type
 import { formatDate } from "../../utils/formatDate";
 import ProgressCircle from "../ProgressCircle";
 
@@ -24,45 +25,8 @@ const ICONS = {
   platinum: require("../../../assets/icons/trophies/platinum.png"),
 };
 
-type StatItemProps = {
-  icon: ImageSourcePropType;
-  earned: number;
-  total: number;
-  disabled?: boolean;
-};
-
-const StatItem = ({ icon, earned, total, disabled = false }: StatItemProps) => (
-  <View style={[styles.statItemContainer, disabled && styles.statItemDisabled]}>
-    <Image
-      source={icon}
-      style={[styles.statIcon, disabled && { tintColor: "#888", opacity: 0.3 }]}
-      resizeMode="contain"
-    />
-    <Text style={[styles.statTotal, disabled && { opacity: 0 }]}>
-      <Text style={[styles.statEarned, { color: "#fff" }]}>{earned}</Text>/{total}
-    </Text>
-  </View>
-);
-
-export type GameVersion = {
-  id: string;
-  platform: string;
-  progress: number;
-  lastPlayed?: string;
-  region?: string;
-  counts: {
-    total: number;
-    bronze: number;
-    silver: number;
-    gold: number;
-    platinum: number;
-    earnedBronze: number;
-    earnedSilver: number;
-    earnedGold: number;
-    earnedPlatinum: number;
-    earned?: number;
-  };
-  // 🟢 NEW: Fallback stats from Master JSON
+// 🟢 EXTENDED TYPE: Add masterStats support locally for UI logic
+type UI_GameVersion = GameVersion & {
   masterStats?: {
     bronze: number;
     silver: number;
@@ -70,14 +34,104 @@ export type GameVersion = {
     platinum: number;
     total: number;
   };
-  isOwned: boolean;
 };
+
+type StatItemProps = {
+  icon: ImageSourcePropType;
+  earned: number;
+  total: number;
+  disabled?: boolean;
+};
+
+// ---------------------------------------------------------------------------
+// SUB-COMPONENTS (Defined outside to prevent re-renders)
+// ---------------------------------------------------------------------------
+
+// 1. Stat Item
+const StatItemComponent = ({ icon, earned, total, disabled = false }: StatItemProps) => (
+  <View style={[styles.statItemContainer, disabled && styles.statItemDisabled]}>
+    <Image
+      source={icon}
+      style={[styles.statIcon, disabled && { tintColor: "#888", opacity: 0.3 }]}
+      resizeMode="contain"
+    />
+    <Text style={[styles.statTotal, disabled && { opacity: 0 }]}>
+      <Text style={styles.statEarned}>{earned}</Text>/{total}
+    </Text>
+  </View>
+);
+const StatItem = memo(StatItemComponent);
+
+// 2. Xbox Stats
+const XboxStatsComponent = ({ activeVer }: { activeVer: UI_GameVersion }) => (
+  <View style={styles.xboxContainer}>
+    <View style={styles.xboxIconGroup}>
+      <View style={styles.xboxIconBadge}>
+        <MaterialCommunityIcons name="trophy-variant" size={14} color="#107c10" />
+      </View>
+      <Text style={styles.xboxTextPrimary}>
+        {activeVer.counts.earned ?? 0}
+        <Text style={styles.xboxTextSecondary}> / {activeVer.counts.total} G</Text>
+      </Text>
+    </View>
+    {activeVer.progress === 100 && (
+      <View style={styles.xboxCompletedBadge}>
+        <Text style={styles.xboxCompletedText}>COMPLETED</Text>
+      </View>
+    )}
+  </View>
+);
+const XboxStats = memo(XboxStatsComponent);
+
+// 3. PSN Stats
+const PsnStatsComponent = ({ activeVer }: { activeVer: UI_GameVersion }) => {
+  // 🟢 Fixed Type Safety: Only allow keys that exist in both objects
+  const getCount = (key: "bronze" | "silver" | "gold" | "platinum") => {
+    return activeVer.counts[key] || activeVer.masterStats?.[key] || 0;
+  };
+
+  const platTotal = getCount("platinum");
+  const goldTotal = getCount("gold");
+  const silverTotal = getCount("silver");
+  const bronzeTotal = getCount("bronze");
+
+  return (
+    <View style={styles.statsRow}>
+      <StatItem
+        icon={ICONS.platinum}
+        earned={activeVer.counts.earnedPlatinum}
+        total={platTotal}
+        disabled={platTotal === 0}
+      />
+      <StatItem
+        icon={ICONS.gold}
+        earned={activeVer.counts.earnedGold}
+        total={goldTotal}
+      />
+      <StatItem
+        icon={ICONS.silver}
+        earned={activeVer.counts.earnedSilver}
+        total={silverTotal}
+      />
+      <StatItem
+        icon={ICONS.bronze}
+        earned={activeVer.counts.earnedBronze}
+        total={bronzeTotal}
+      />
+    </View>
+  );
+};
+const PsnStats = memo(PsnStatsComponent);
+
+// ---------------------------------------------------------------------------
+// MAIN COMPONENT
+// ---------------------------------------------------------------------------
 
 type GameCardProps = {
   title: string;
   icon: string;
   art?: string;
-  versions: GameVersion[];
+  versions: UI_GameVersion[];
   justUpdated?: boolean;
   isPinned?: boolean;
   onPin?: (id: string) => void;
@@ -95,9 +149,12 @@ const GameCard = ({
   sourceMode,
 }: GameCardProps) => {
   const router = useRouter();
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const [loadIcon, setLoadIcon] = useState(false);
 
+  // Group versions by platform
   const groupedVersions = useMemo(() => {
-    const groups: Record<string, GameVersion[]> = {};
+    const groups: Record<string, UI_GameVersion[]> = {};
     versions.forEach((v) => {
       if (!groups[v.platform]) groups[v.platform] = [];
       groups[v.platform].push(v);
@@ -105,161 +162,88 @@ const GameCard = ({
     return groups;
   }, [versions]);
 
-  const uniquePlatforms = Object.keys(groupedVersions).sort((a, b) => {
-    if (a === "PS5") return -1;
-    if (b === "PS5") return 1;
-    return 0;
-  });
+  // Sort platforms (PS5 first)
+  const uniquePlatforms = useMemo(() => {
+    return Object.keys(groupedVersions).sort((a, b) => {
+      if (a === "PS5") return -1;
+      if (b === "PS5") return 1;
+      return 0;
+    });
+  }, [groupedVersions]);
 
   const [activePlatform, setActivePlatform] = useState(uniquePlatforms[0]);
 
+  // Ensure active platform exists in list if props change
   useEffect(() => {
     if (!uniquePlatforms.includes(activePlatform)) {
       setActivePlatform(uniquePlatforms[0]);
     }
-  }, [uniquePlatforms]);
+  }, [uniquePlatforms, activePlatform]);
 
   const currentStack = groupedVersions[activePlatform] || [];
   const activeVer = currentStack[0] || versions[0];
-
-  const [loadIcon, setLoadIcon] = useState(false);
-  const glowAnim = useRef(new Animated.Value(0)).current;
 
   const displayImage = icon;
   const heroArt = art || icon;
   const isSquareFormat = activeVer.platform === "PS5";
   const imageResizeMode = isSquareFormat ? "cover" : "contain";
 
-  const totalEarned =
-    (activeVer.counts.earned || 0) +
-    activeVer.counts.earnedBronze +
-    activeVer.counts.earnedSilver +
-    activeVer.counts.earnedGold +
-    activeVer.counts.earnedPlatinum;
+  // Calculate total for "Started" check
+  const totalEarned = useMemo(() => {
+    if (!activeVer) return 0;
+    return (
+      (activeVer.counts.earned || 0) +
+      activeVer.counts.earnedBronze +
+      activeVer.counts.earnedSilver +
+      activeVer.counts.earnedGold +
+      activeVer.counts.earnedPlatinum
+    );
+  }, [activeVer]);
 
   const hasStarted = totalEarned > 0;
 
+  // Delay image load slightly for smoother list mounting
   useEffect(() => {
-    setTimeout(() => setLoadIcon(true), 50);
+    const t = setTimeout(() => setLoadIcon(true), 50);
+    return () => clearTimeout(t);
   }, []);
 
+  // Flash animation logic
   useEffect(() => {
     if (justUpdated) {
       Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: false,
+        }),
         Animated.delay(2000),
-        Animated.timing(glowAnim, { toValue: 0, duration: 1000, useNativeDriver: false }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: false,
+        }),
       ]).start();
     }
-  }, [justUpdated]);
+  }, [justUpdated, glowAnim]);
 
   const borderColor = glowAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ["rgba(0,0,0,0)", "rgba(255, 215, 0, 0.8)"],
   });
 
-  // 🟢 HELPER: Get Total (User Data OR Master Fallback)
-  const getCount = (key: keyof typeof activeVer.counts) => {
-    // If user data exists (non-zero), use it. Otherwise try masterStats.
-    // @ts-ignore
-    return activeVer.counts[key] || activeVer.masterStats?.[key] || 0;
-  };
-
-  const renderStats = () => {
-    if (activeVer.platform === "XBOX") {
-      return (
-        <View
-          style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                backgroundColor: "rgba(16, 124, 16, 0.2)",
-                justifyContent: "center",
-                alignItems: "center",
-                marginRight: 6,
-                borderWidth: 1,
-                borderColor: "rgba(16, 124, 16, 0.3)",
-              }}
-            >
-              <MaterialCommunityIcons name="trophy-variant" size={14} color="#107c10" />
-            </View>
-            <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>
-              {activeVer.counts.earned ?? 0}
-              <Text style={{ color: "#666", fontSize: 11, fontWeight: "600" }}>
-                {" "}
-                / {activeVer.counts.total} G
-              </Text>
-            </Text>
-          </View>
-          {activeVer.progress === 100 && (
-            <View
-              style={{
-                backgroundColor: "rgba(16, 124, 16, 0.2)",
-                paddingHorizontal: 6,
-                paddingVertical: 3,
-                borderRadius: 4,
-                borderWidth: 1,
-                borderColor: "rgba(16, 124, 16, 0.3)",
-              }}
-            >
-              <Text style={{ color: "#107c10", fontSize: 9, fontWeight: "bold" }}>
-                COMPLETED
-              </Text>
-            </View>
-          )}
-        </View>
-      );
-    }
-
-    // 🟢 UPDATED: Use Fallback Stats
-    const platTotal = getCount("platinum");
-    const goldTotal = getCount("gold");
-    const silverTotal = getCount("silver");
-    const bronzeTotal = getCount("bronze");
-
-    return (
-      <View style={styles.statsRow}>
-        <StatItem
-          icon={ICONS.platinum}
-          earned={activeVer.counts.earnedPlatinum}
-          total={platTotal}
-          disabled={platTotal === 0}
-        />
-        <StatItem
-          icon={ICONS.gold}
-          earned={activeVer.counts.earnedGold}
-          total={goldTotal}
-        />
-        <StatItem
-          icon={ICONS.silver}
-          earned={activeVer.counts.earnedSilver}
-          total={silverTotal}
-        />
-        <StatItem
-          icon={ICONS.bronze}
-          earned={activeVer.counts.earnedBronze}
-          total={bronzeTotal}
-        />
-      </View>
-    );
+  const handlePress = () => {
+    router.push({
+      pathname: "/game/[id]",
+      params: { id: activeVer.id, artParam: heroArt, contextMode: sourceMode },
+    });
   };
 
   return (
     <View style={styles.wrapper}>
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={() =>
-          router.push({
-            pathname: "/game/[id]",
-            params: { id: activeVer.id, artParam: heroArt, contextMode: sourceMode },
-          })
-        }
-      >
+      <TouchableOpacity activeOpacity={0.8} onPress={handlePress}>
         <Animated.View style={[styles.cardContainer, { borderColor, borderWidth: 1 }]}>
+          {/* LEFT: Cover Image & Badges */}
           <View style={styles.imageColumn}>
             <View style={styles.imageWrapper}>
               {loadIcon && (
@@ -295,12 +279,17 @@ const GameCard = ({
             </View>
           </View>
 
+          {/* MIDDLE: Info & Stats */}
           <View style={[styles.infoColumn, { height: IMG_SIZE }]}>
             <Text numberOfLines={1} ellipsizeMode="tail" style={styles.title}>
               {title}
             </Text>
 
-            {renderStats()}
+            {activeVer.platform === "XBOX" ? (
+              <XboxStats activeVer={activeVer} />
+            ) : (
+              <PsnStats activeVer={activeVer} />
+            )}
 
             {hasStarted ? (
               <Text style={styles.dateText}>
@@ -313,11 +302,14 @@ const GameCard = ({
             )}
           </View>
 
+          {/* RIGHT: Progress Circle */}
           <View style={styles.circleColumn}>
             <ProgressCircle progress={activeVer.progress} size={42} strokeWidth={3} />
           </View>
         </Animated.View>
       </TouchableOpacity>
+
+      {/* Pin Button */}
       <TouchableOpacity
         onPress={() => onPin?.(activeVer.id)}
         style={styles.pinButton}

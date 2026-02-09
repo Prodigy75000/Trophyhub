@@ -1,7 +1,7 @@
+// src/hooks/context/useTrophyData.ts
 import { useCallback, useEffect, useState } from "react";
 import { PROXY_BASE_URL } from "../../../config/endpoints";
 import { TrophyData } from "../../types/ContextTypes";
-// 🟢 FIX: Correct imports matching your utils file
 import { loadTrophyCache, saveTrophyCache } from "../../utils/trophyCache";
 
 export function useTrophyData(accessToken: string | null, accountId: string | null) {
@@ -17,19 +17,25 @@ export function useTrophyData(accessToken: string | null, accountId: string | nu
       if (trophies) return;
 
       setIsLoadingCache(true);
-      // 🟢 FIX: Use loadTrophyCache (no arguments needed if using static key)
-      const cached = await loadTrophyCache();
+      try {
+        // 🟢 FIX: Cast the result to TrophyData so TypeScript is happy
+        const rawCache = await loadTrophyCache();
+        const cached = rawCache as TrophyData | null;
 
-      if (mounted && cached) {
-        console.log("💾 [Cache] Hydrated trophies from disk");
-        setTrophies(cached);
-        // If your cache object has metadata, extract it here.
-        // For now, we assume 'cached' is the data object itself.
-        setLastUpdated(Date.now());
+        if (mounted && cached && Object.keys(cached).length > 0) {
+          console.log("💾 [Cache] Hydrated trophies from disk");
+          setTrophies(cached);
+          setLastUpdated(Date.now());
+        }
+      } catch (e) {
+        console.warn("Failed to load trophy cache", e);
+      } finally {
+        if (mounted) setIsLoadingCache(false);
       }
-      if (mounted) setIsLoadingCache(false);
     };
+
     load();
+
     return () => {
       mounted = false;
     };
@@ -46,12 +52,11 @@ export function useTrophyData(accessToken: string | null, accountId: string | nu
 
       if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
 
-      const data = await res.json();
+      const data: TrophyData = await res.json();
 
       setTrophies(data);
       setLastUpdated(Date.now());
 
-      // 🟢 FIX: Use saveTrophyCache
       saveTrophyCache(data);
       console.log("✅ [TrophyContext] Data updated & cached");
     } catch (err) {
@@ -77,7 +82,8 @@ export function useTrophyData(accessToken: string | null, accountId: string | nu
           const total = trophyList.length;
           const progress = total > 0 ? Math.floor((earned / total) * 100) : 0;
 
-          const newData = {
+          // 🟢 FIX: Explicitly type newData to avoid implicit 'any' errors
+          const newData: TrophyData = {
             ...prev,
             trophyTitles: prev.trophyTitles.map((t) =>
               String(t.npCommunicationId) === String(npwr)
@@ -86,7 +92,6 @@ export function useTrophyData(accessToken: string | null, accountId: string | nu
             ),
           };
 
-          // 🟢 FIX: Use saveTrophyCache
           saveTrophyCache(newData);
 
           return newData;

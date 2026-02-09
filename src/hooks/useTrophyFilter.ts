@@ -1,4 +1,4 @@
-// hooks/useTrophyFilter.ts
+// src/hooks/useTrophyFilter.ts
 import { useMemo } from "react";
 import type {
   FilterMode,
@@ -7,10 +7,25 @@ import type {
   SortDirection,
   SortMode,
 } from "../components/HeaderActionBar";
+import { GameVersion, MasterGameEntry } from "../types/GameTypes";
+import { XboxTitle } from "../types/XboxTypes";
+import { processPsnGame, processXboxGame } from "../utils/gameProcessor";
 import { calculateUserStats } from "../utils/trophyCalculations";
-import { GameVersion, MasterGameEntry, XboxTitle } from "./game-details/types";
-import { useGameIdentifier } from "./game-details/useGameIdentifier";
-import { useTrophyProcessor } from "./game-details/useTrophyProcessor";
+import { useMasterGameLookup } from "./useMasterGameLookup";
+
+/**
+ * Type Extension to handle masterStats until GameTypes.ts is fully re-synced.
+ * This ensures the UI can show "0 / 51" for unowned games[cite: 1].
+ */
+type AugmentedGameVersion = GameVersion & {
+  masterStats?: {
+    bronze: number;
+    silver: number;
+    gold: number;
+    platinum: number;
+    total: number;
+  };
+};
 
 export function useTrophyFilter(
   userTrophies: any | null,
@@ -25,9 +40,8 @@ export function useTrophyFilter(
   showShovelware: boolean,
   platforms: PlatformFilter
 ) {
-  // 1. INITIALIZE HELPERS
-  const { identifyGame } = useGameIdentifier(masterGames);
-  const { processPsnGame, processXboxGame } = useTrophyProcessor();
+  // 1. INITIALIZE HELPERS (O(1) Fast Lookup) [cite: 2]
+  const { identifyGame } = useMasterGameLookup();
 
   // 2. CALCULATE DASHBOARD STATS
   const userStats = useMemo(() => {
@@ -44,37 +58,35 @@ export function useTrophyFilter(
         icon?: string;
         art?: string;
         tags: string[];
-        versions: GameVersion[];
+        versions: AugmentedGameVersion[];
       }
     >();
 
-    // Helper to check platform toggle
+    // Helper: Platform Filter Toggle logic
     const isPlatformEnabled = (plat: string) => {
       const p = plat.toUpperCase();
       if (p.includes("PS5") && platforms.PS5) return true;
       if (p.includes("PS4") && platforms.PS4) return true;
       if (p.includes("PS3") && platforms.PS3) return true;
       if ((p.includes("VITA") || p.includes("PS VITA")) && platforms.PSVITA) return true;
-      if (p === "XBOX") return true; // Always show Xbox if loaded (or add a toggle later)
+      if (p === "XBOX") return true;
       return false;
     };
 
-    // A. PROCESS PSN GAMES
+    // --- A. PROCESS OWNED PSN GAMES ---
     userTrophies?.trophyTitles?.forEach((game: any) => {
-      const processed = processPsnGame(game);
+      const processed = processPsnGame(game) as AugmentedGameVersion;
       if (!isPlatformEnabled(processed.platform)) return;
 
-      const master = identifyGame(game.npCommunicationId, game.trophyTitleName);
+      const master = identifyGame(game.npCommunicationId);
       const key = master?.canonicalId || game.npCommunicationId;
 
-      // 🟢 INJECT MASTER STATS (Fallback for Owned Games)
+      // Inject Master Stats for display fallback [cite: 1]
       if (master?.stats) {
-        // @ts-ignore - Dynamic injection
         processed.masterStats = master.stats;
       }
 
       if (!groupedMap.has(key)) {
-        // Image Priority: Master Store -> Icon -> Master Grid
         const manualArt = master?.art;
         const icon =
           manualArt?.storesquare || game.trophyTitleIconUrl || manualArt?.square;
@@ -92,17 +104,15 @@ export function useTrophyFilter(
       groupedMap.get(key)!.versions.push(processed);
     });
 
-    // B. PROCESS XBOX GAMES
+    // --- B. PROCESS OWNED XBOX GAMES ---
     xboxTitles?.forEach((game) => {
-      const processed = processXboxGame(game);
-      // Only process if you want to filter Xbox via a toggle later, for now we include it
+      const processed = processXboxGame(game, identifyGame) as AugmentedGameVersion;
+      if (!processed) return;
 
-      const master = identifyGame(game.titleId, game.name);
+      const master = identifyGame(game.titleId);
       const key = master?.canonicalId || `xbox_${game.titleId}`;
 
-      // 🟢 INJECT MASTER STATS (If we ever map Xbox to Master)
       if (master?.stats) {
-        // @ts-ignore
         processed.masterStats = master.stats;
       }
 
@@ -119,13 +129,13 @@ export function useTrophyFilter(
       groupedMap.get(key)!.versions.push(processed);
     });
 
-    // C. PROCESS UNOWNED (If Global Mode)
+    // --- C. PROCESS UNOWNED (Global/Discover Mode) ---
+    // This section now correctly uses the platforms dictionary[cite: 2].
     if (ownershipMode !== "OWNED") {
       masterGames.forEach((master) => {
         const key = master.canonicalId;
-        if (!key) return;
+        if (!key || !master.platforms) return;
 
-        // Determine if we need to add this game to the map
         let group = groupedMap.get(key);
 
         if (!group) {
@@ -144,50 +154,40 @@ export function useTrophyFilter(
           groupedMap.set(key, group);
         }
 
-        // Add "Ghost" versions for unowned platforms
-        master.linkedVersions?.forEach((v) => {
-          // Skip if we already have this version (e.g. we own the PS5 version)
-          if (
-            group!.versions.some(
-              (gv) => gv.id === v.npCommunicationId || gv.id === v.titleId
-            )
-          )
-            return;
+        // Iterate through Platform Dictionary (PS5, PS4, etc.) [cite: 2]
+        Object.entries(master.platforms).forEach(([platformKey, variants]) => {
+          if (!isPlatformEnabled(platformKey)) return;
 
-          // Normalize platform string for the filter check
-          const rawPlat = v.platform || "UNKNOWN";
-          let normPlat = rawPlat;
-          if (rawPlat.includes("PS5")) normPlat = "PS5";
-          else if (rawPlat.includes("PS4")) normPlat = "PS4";
+          variants.forEach((v: any) => {
+            // Skip if user already owns this specific version (by ID)
+            if (group!.versions.some((gv) => gv.id === v.id)) return;
 
-          if (!isPlatformEnabled(normPlat)) return;
-
-          group!.versions.push({
-            id: v.npCommunicationId || v.titleId || "unknown",
-            platform: normPlat,
-            region: v.region,
-            progress: 0,
-            isOwned: false,
-            // 🟢 INJECT MASTER STATS (Crucial for Global Mode display)
-            // @ts-ignore
-            masterStats: master.stats,
-            counts: {
-              total: 0,
-              bronze: 0,
-              silver: 0,
-              gold: 0,
-              platinum: 0,
-              earnedBronze: 0,
-              earnedSilver: 0,
-              earnedGold: 0,
-              earnedPlatinum: 0,
-            },
+            group!.versions.push({
+              id: v.id || "unknown",
+              platform: platformKey,
+              region: v.region,
+              progress: 0,
+              isOwned: false,
+              masterStats: master.stats,
+              lastPlayed: "",
+              counts: {
+                total: 0,
+                bronze: 0,
+                silver: 0,
+                gold: 0,
+                platinum: 0,
+                earnedBronze: 0,
+                earnedSilver: 0,
+                earnedGold: 0,
+                earnedPlatinum: 0,
+              },
+            } as AugmentedGameVersion);
           });
         });
       });
     }
 
-    // D. FINAL FILTERING
+    // --- D. FINAL FILTERING ---
     let combinedList = Array.from(groupedMap.values()).filter(
       (g) => g.versions.length > 0
     );
@@ -218,8 +218,6 @@ export function useTrophyFilter(
     xboxTitles,
     masterGames,
     identifyGame,
-    processPsnGame,
-    processXboxGame,
     searchText,
     filterMode,
     ownershipMode,
@@ -227,33 +225,34 @@ export function useTrophyFilter(
     platforms,
   ]);
 
-  // 4. SORTING
+  // 4. SORTING LOGIC
   const sortedList = useMemo(() => {
     const list = [...processedList];
     const dir = sortDirection === "ASC" ? 1 : -1;
 
     list.sort((a, b) => {
-      const bestA = a.versions[0];
-      const bestB = b.versions[0];
-
-      // Pin Logic
       const isPinnedA = a.versions.some((v) => pinnedIds.has(v.id));
       const isPinnedB = b.versions.some((v) => pinnedIds.has(v.id));
+
       if (isPinnedA && !isPinnedB) return -1;
       if (!isPinnedA && isPinnedB) return 1;
 
       if (sortMode === "TITLE") {
         return (a.title || "").localeCompare(b.title || "") * dir;
       }
+
       if (sortMode === "PROGRESS") {
         const progA = Math.max(...a.versions.map((v) => v.progress || 0));
         const progB = Math.max(...b.versions.map((v) => v.progress || 0));
         return (progA - progB) * dir;
       }
 
-      // Default: Date Earned / Last Played
-      const timeA = new Date(bestA?.lastPlayed || 0).getTime();
-      const timeB = new Date(bestB?.lastPlayed || 0).getTime();
+      // Default: Last Played [cite: 1]
+      const bestA = a.versions[0];
+      const bestB = b.versions[0];
+      const timeA = bestA?.lastPlayed ? new Date(bestA.lastPlayed).getTime() : 0;
+      const timeB = bestB?.lastPlayed ? new Date(bestB.lastPlayed).getTime() : 0;
+
       return (timeA - timeB) * dir;
     });
 

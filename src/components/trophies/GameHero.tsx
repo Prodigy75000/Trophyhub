@@ -6,6 +6,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import ProgressCircle from "../ProgressCircle";
 
+// Types
+import { GameVersion } from "../../types/GameTypes"; // 🟢 Use shared types
+
 // Styles
 import { BASE_ICON_HEIGHT, styles } from "../../styles/GameHero.styles";
 
@@ -27,7 +30,7 @@ type HeroProps = {
     platinum: number;
   };
   displayArt?: string | null;
-  versions?: { id: string; platform: string; region?: string }[];
+  versions?: GameVersion[]; // 🟢 Typed correctly
   activeId?: string;
   contextMode?: string;
 };
@@ -37,8 +40,8 @@ export default function GameHero({
   title,
   platform,
   progress,
-  earnedTrophies,
-  definedTrophies,
+  earnedTrophies = { bronze: 0, silver: 0, gold: 0, platinum: 0 }, // Defaults
+  definedTrophies = { bronze: 0, silver: 0, gold: 0, platinum: 0 },
   displayArt,
   versions = [],
   activeId,
@@ -48,46 +51,64 @@ export default function GameHero({
 
   // 1. ASPECT RATIO LOGIC
   const [aspectRatio, setAspectRatio] = useState(1);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     if (iconUrl) {
       Image.getSize(
         iconUrl,
         (width, height) => {
-          if (width && height) {
+          if (isMounted && width && height) {
             setAspectRatio(width / height);
+            setImageLoaded(true);
           }
         },
-        (error) => console.log("Image size error:", error)
+        (error) => {
+          console.log("Image size error:", error);
+          if (isMounted) setImageLoaded(true); // Show fallback
+        }
       );
     }
+    return () => {
+      isMounted = false;
+    };
   }, [iconUrl]);
 
   const isLandscape = aspectRatio > 1.2;
   const iconStyle = {
     height: BASE_ICON_HEIGHT,
     width: isLandscape ? BASE_ICON_HEIGHT * aspectRatio : BASE_ICON_HEIGHT,
-    maxWidth: 180,
+    maxWidth: 180, // Prevent it from getting too wide on tablets
   };
 
   // --- Smart Grouping & State ---
   const grouped = useMemo(() => {
-    const map: Record<string, { id: string; platform: string; region?: string }[]> = {};
+    const map: Record<string, GameVersion[]> = {};
     versions.forEach((v) => {
-      if (!map[v.platform]) map[v.platform] = [];
-      map[v.platform].push(v);
+      // Normalize platform string if needed, or rely on raw data
+      const p = v.platform || "Unknown";
+      if (!map[p]) map[p] = [];
+      map[p].push(v);
     });
     return map;
   }, [versions]);
 
-  const uniquePlatforms = Object.keys(grouped).sort((a, b) => {
-    if (a === "PS5") return -1;
-    if (b === "PS5") return 1;
-    return 0;
-  });
+  const uniquePlatforms = useMemo(
+    () =>
+      Object.keys(grouped).sort((a, b) => {
+        // Prioritize PS5, then PS4
+        if (a.includes("PS5")) return -1;
+        if (b.includes("PS5")) return 1;
+        return 0;
+      }),
+    [grouped]
+  );
 
+  // Determine initial state based on activeId (URL param)
   const initialSetup = useMemo(() => {
     if (!activeId) return { plat: uniquePlatforms[0] || platform, idx: 0 };
+
     for (const plat of uniquePlatforms) {
       const idx = grouped[plat].findIndex((v) => v.id === activeId);
       if (idx !== -1) return { plat, idx };
@@ -98,6 +119,7 @@ export default function GameHero({
   const [activePlatform, setActivePlatform] = useState(initialSetup.plat);
   const [variantIndex, setVariantIndex] = useState(initialSetup.idx);
 
+  // Sync state when URL params change (e.g., user navigated)
   useEffect(() => {
     setActivePlatform(initialSetup.plat);
     setVariantIndex(initialSetup.idx);
@@ -105,42 +127,57 @@ export default function GameHero({
 
   const handlePlatformSwitch = (plat: string) => {
     if (plat === activePlatform) return;
-    setActivePlatform(plat);
-    setVariantIndex(0);
-    const newId = grouped[plat][0].id;
-    router.replace({
-      pathname: "/game/[id]",
-      params: { id: newId, artParam: displayArt, contextMode },
-    });
+
+    // Find the first game ID for this platform
+    const targetGame = grouped[plat]?.[0];
+    if (targetGame) {
+      // Navigation forces a re-mount/update, so we don't strictly need to set state here,
+      // but it makes the UI feel snappier.
+      setActivePlatform(plat);
+      setVariantIndex(0);
+
+      router.replace({
+        pathname: "/game/[id]",
+        params: { id: targetGame.id, artParam: displayArt, contextMode },
+      });
+    }
   };
 
   const handleVariantCycle = () => {
     const stack = grouped[activePlatform] || [];
     if (stack.length <= 1) return;
+
     const nextIndex = (variantIndex + 1) % stack.length;
+    const nextGame = stack[nextIndex];
+
     setVariantIndex(nextIndex);
-    const newId = stack[nextIndex].id;
     router.replace({
       pathname: "/game/[id]",
-      params: { id: newId, artParam: displayArt, contextMode },
+      params: { id: nextGame.id, artParam: displayArt, contextMode },
     });
   };
 
-  const totalEarned =
-    earnedTrophies.bronze +
-    earnedTrophies.silver +
-    earnedTrophies.gold +
-    earnedTrophies.platinum;
+  const totalEarned = useMemo(
+    () =>
+      (earnedTrophies.bronze || 0) +
+      (earnedTrophies.silver || 0) +
+      (earnedTrophies.gold || 0) +
+      (earnedTrophies.platinum || 0),
+    [earnedTrophies]
+  );
 
-  const totalDefined =
-    definedTrophies.bronze +
-    definedTrophies.silver +
-    definedTrophies.gold +
-    definedTrophies.platinum;
+  const totalDefined = useMemo(
+    () =>
+      (definedTrophies.bronze || 0) +
+      (definedTrophies.silver || 0) +
+      (definedTrophies.gold || 0) +
+      (definedTrophies.platinum || 0),
+    [definedTrophies]
+  );
 
   const currentStack = grouped[activePlatform] || [];
   const hasVariants = currentStack.length > 1;
-  const currentRegion = currentStack[variantIndex]?.region || "Unknown Region";
+  const currentRegion = currentStack[variantIndex]?.region || "Region"; // Fallback text
 
   return (
     <View style={styles.container}>
@@ -215,6 +252,7 @@ export default function GameHero({
               { width: iconStyle.width, height: iconStyle.height },
             ]}
           >
+            {/* Only show icon if loaded or fallback to square to prevent jump */}
             <Image source={{ uri: iconUrl }} style={styles.icon} resizeMode="cover" />
           </View>
 

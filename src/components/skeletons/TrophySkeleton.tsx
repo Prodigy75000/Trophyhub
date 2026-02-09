@@ -1,20 +1,18 @@
 import React, { memo, useEffect, useRef } from "react";
 import { Animated, View, ViewStyle } from "react-native";
-import { styles } from "../../styles/TrophySkeleton.styles"; // 🟢 Import
+import { styles } from "../../styles/TrophySkeleton.styles";
 
 type Props = {
   style?: ViewStyle;
 };
 
 function TrophySkeleton({ style }: Props) {
-  // Pulse Animation Ref
   const opacity = useRef(new Animated.Value(0.3)).current;
 
-  // Setup Loop
   useEffect(() => {
     const pulse = Animated.sequence([
       Animated.timing(opacity, {
-        toValue: 0.7, // Slightly brighter pulse
+        toValue: 0.7,
         duration: 800,
         useNativeDriver: true,
       }),
@@ -24,33 +22,37 @@ function TrophySkeleton({ style }: Props) {
         useNativeDriver: true,
       }),
     ]);
-
     const loop = Animated.loop(pulse);
     loop.start();
-
     return () => loop.stop();
   }, [opacity]);
 
   return (
     <View style={[styles.container, style]}>
-      {/* Icon Placeholder */}
+      {/* Large Icon on Left */}
       <Animated.View style={[styles.icon, { opacity }]} />
 
       <View style={styles.info}>
-        {/* Title Bar */}
-        <Animated.View style={[styles.bar, styles.titleBar, { opacity }]} />
+        {/* 1. Title Row (Rank Icon + Title Bar) */}
+        <View style={styles.titleRow}>
+          <Animated.View style={[styles.miniRankIcon, { opacity }]} />
+          <Animated.View style={[styles.nameBar, { opacity }]} />
+        </View>
 
-        {/* Description Bar */}
-        <Animated.View style={[styles.bar, styles.descBar, { opacity }]} />
+        {/* 2. Description Block (2 lines) */}
+        <View style={styles.descriptionBlock}>
+          <Animated.View style={[styles.descLine1, { opacity }]} />
+          <Animated.View style={[styles.descLine2, { opacity }]} />
+        </View>
 
-        {/* Bottom Row (Status + Rarity) */}
+        {/* 3. Bottom Row (Date/Status + Rarity Pill) */}
         <View style={styles.bottomRow}>
-          <Animated.View style={[styles.bar, styles.statusBar, { opacity }]} />
-          <Animated.View style={[styles.bar, styles.rarityBar, { opacity }]} />
+          <Animated.View style={[styles.statusBar, { opacity }]} />
+          <Animated.View style={[styles.rarityBar, { opacity }]} />
         </View>
       </View>
 
-      {/* Right Side Stripe */}
+      {/* Optional Side Stripe */}
       <Animated.View style={[styles.stripe, { opacity }]} />
     </View>
   );

@@ -1,16 +1,11 @@
 // components/HeaderActionBar.tsx
 import { Ionicons } from "@expo/vector-icons";
 import React, { memo, useState } from "react";
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Modal, Pressable, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+// Styles
+import { styles } from "../styles/HeaderActionBar.styles";
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -22,7 +17,6 @@ export type ViewMode = "LIST" | "GRID";
 export type FilterMode = "ALL" | "IN_PROGRESS" | "COMPLETED" | "NOT_STARTED";
 export type OwnershipMode = "OWNED" | "UNOWNED" | "GLOBAL";
 
-// New type for Platform State
 export type PlatformFilter = {
   PS3: boolean;
   PS4: boolean;
@@ -51,10 +45,14 @@ type HeaderProps = {
   showShovelware: boolean;
   onToggleShovelware: () => void;
 
-  // 🔽 NEW PLATFORM PROPS
+  // Platform Filters
   platforms: PlatformFilter;
   onTogglePlatform: (key: keyof PlatformFilter) => void;
 };
+
+// ---------------------------------------------------------------------------
+// SUB-COMPONENTS
+// ---------------------------------------------------------------------------
 
 type MenuOptionProps<T> = {
   label: string;
@@ -102,6 +100,35 @@ function MenuOption<T>({
   );
 }
 
+// 🟢 Typed Platform Toggle Helper
+const PlatformToggle = ({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={[
+      styles.platToggle,
+      active
+        ? { backgroundColor: "#4da3ff" }
+        : { backgroundColor: "#1c1c26", borderWidth: 1, borderColor: "#333" },
+    ]}
+  >
+    <Text style={[styles.platText, active ? { color: "white" } : { color: "#888" }]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
+// ---------------------------------------------------------------------------
+// MAIN COMPONENT
+// ---------------------------------------------------------------------------
+
 function HeaderActionBar({
   onMenuPress,
   onLocalSearch,
@@ -117,8 +144,8 @@ function HeaderActionBar({
   onOwnershipChange,
   showShovelware,
   onToggleShovelware,
-  platforms, // 👈
-  onTogglePlatform, // 👈
+  platforms,
+  onTogglePlatform,
 }: HeaderProps) {
   const insets = useSafeAreaInsets();
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -386,126 +413,4 @@ function HeaderActionBar({
   );
 }
 
-// Helper for Platform Bubbles
-const PlatformToggle = ({ label, active, onPress }: any) => (
-  <TouchableOpacity
-    onPress={onPress}
-    style={[
-      styles.platToggle,
-      active
-        ? { backgroundColor: "#4da3ff" }
-        : { backgroundColor: "#1c1c26", borderWidth: 1, borderColor: "#333" },
-    ]}
-  >
-    <Text style={[styles.platText, active ? { color: "white" } : { color: "#888" }]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
 export default memo(HeaderActionBar);
-
-const styles = StyleSheet.create({
-  container: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 12 },
-  row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#1c1c26",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  btnActive: { backgroundColor: "rgba(77, 163, 255, 0.1)", borderColor: "#4da3ff" },
-  centered: { alignItems: "center", justifyContent: "center" },
-  searchContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1c1c26",
-    height: 40,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  input: { flex: 1, color: "white", paddingBottom: 4, paddingTop: 0, fontSize: 15 },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
-  menuContainer: {
-    position: "absolute",
-    right: 16,
-    width: 250,
-    backgroundColor: "#151b2b",
-    borderRadius: 16,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: "#444",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  menuHeader: {
-    color: "#666",
-    fontSize: 12,
-    fontWeight: "bold",
-    marginLeft: 12,
-    marginVertical: 8,
-    textTransform: "uppercase",
-  },
-  divider: { height: 1, backgroundColor: "#333", marginVertical: 4, marginHorizontal: 8 },
-  optionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  optionSelected: { backgroundColor: "rgba(77, 163, 255, 0.1)" },
-  optionContent: { flexDirection: "row", alignItems: "center" },
-  optionIcon: { marginRight: 12 },
-  optionText: { color: "white", fontSize: 15 },
-  badge: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#4da3ff",
-    borderWidth: 1.5,
-    borderColor: "#1c1c26",
-  },
-  tinyLabel: {
-    fontSize: 7,
-    color: "#888",
-    fontWeight: "700",
-    textTransform: "uppercase",
-    textAlign: "center",
-    maxWidth: 36,
-  },
-
-  // Platform Toggle Styles
-  platformRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    paddingHorizontal: 12,
-    marginBottom: 4,
-  },
-  platToggle: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    minWidth: 48,
-    alignItems: "center",
-  },
-  platText: {
-    fontWeight: "bold",
-    fontSize: 11,
-  },
-});

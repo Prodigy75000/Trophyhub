@@ -1,8 +1,13 @@
+// app/game/[id].tsx
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+// Context & Providers
 import { useTrophy } from "../../providers/TrophyContext";
+
+// Components
 import TrophySkeleton from "../../src/components/skeletons/TrophySkeleton";
 import GameHero from "../../src/components/trophies/GameHero";
 import TrophyActionSheet from "../../src/components/trophies/TrophyActionSheet";
@@ -11,11 +16,15 @@ import TrophyGroupHeader from "../../src/components/trophies/TrophyGroupHeader";
 import TrophyListHeader, {
   TrophySortMode,
 } from "../../src/components/trophies/TrophyListHeader";
+
+// Hooks & Utils
 import { useGameDetails } from "../../src/hooks/game-details/useGameDetails";
-import { styles } from "../../src/styles/GameScreen.styles"; // 🟢 Imported Styles
 import { normalizeTrophyType } from "../../src/utils/normalizeTrophy";
 
-// ⚠️ IMPORT MASTER DATA
+// Styles
+import { styles } from "../../src/styles/GameScreen.styles";
+
+// Data
 import masterGamesRaw from "../../data/master_games.json";
 
 const HEADER_HEIGHT = 60;
@@ -48,46 +57,64 @@ export default function GameScreen() {
     justEarnedIds,
   } = useGameDetails(gameId, searchText, sortMode as any, sortDirection);
 
-  // --- STALE DATA CHECK ---
-  const isDataStale = game && String(game.npCommunicationId) !== String(gameId);
-  const showListSkeletons = isLoadingDetails || isDataStale || !game;
-
-  // --- MEMOIZED LOGIC (Versions) ---
-  const versions = useMemo(() => {
-    if (!gameId) return [];
-    const entry = (masterGamesRaw as any[]).find((g) =>
-      g.linkedVersions?.some((v: any) => v.npCommunicationId === gameId)
+  // 1. Identify instantly if the game has DLC from local JSON.tsx]
+  const hasDlc = useMemo(() => {
+    const entry = (masterGamesRaw as any[]).find(
+      (g) =>
+        g.canonicalId === gameId ||
+        Object.values(g.platforms || {}).some((l: any) =>
+          l.some((v: any) => v.id === gameId)
+        )
     );
+    return (entry?.trophyGroups?.length ?? 0) > 1;
+  }, [gameId]);
 
-    let rawList: any[] = [];
-    if (entry && entry.linkedVersions) {
-      rawList = entry.linkedVersions.map((v: any) => ({
-        id: v.npCommunicationId,
-        platform: v.platform,
-        region: v.region,
-      }));
-    } else {
-      rawList = [{ id: gameId, platform: game ? game.trophyTitlePlatform : "PSN" }];
-    }
+  // --- LOGIC: REVEAL GATING ---
+  const isDataStale = game && String(game.id) !== String(gameId);
 
-    const uniqueMap = new Map();
-    rawList.forEach((v: any) => {
-      if (!uniqueMap.has(v.id)) uniqueMap.set(v.id, v);
-    });
-    const uniqueList = Array.from(uniqueMap.values());
+  const isContentReady =
+    !isLoadingDetails &&
+    !isDataStale &&
+    game &&
+    processedTrophies.length > 0 &&
+    (sortMode !== "DEFAULT" || !hasDlc || (hasDlc && groupedData !== null)); //.tsx]
 
-    const isDiscoverMode = contextModeStr === "GLOBAL";
-    if (!isDiscoverMode && trophies?.trophyTitles) {
-      return uniqueList.filter((v: any) => {
-        return trophies.trophyTitles.some(
-          (owned: any) => String(owned.npCommunicationId) === String(v.id)
-        );
-      });
-    }
-    return uniqueList;
+  const showListSkeletons = !isContentReady;
+
+  // Reveal Animation.tsx]
+  const listOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(listOpacity, {
+      toValue: isContentReady ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [isContentReady]);
+
+  // --- VERSIONS & SCROLLING ---
+  const versions = useMemo(() => {
+    const entry = (masterGamesRaw as any[]).find(
+      (g) =>
+        g.canonicalId === gameId ||
+        Object.values(g.platforms || {}).some((l: any) =>
+          l.some((v: any) => v.id === gameId)
+        )
+    );
+    let list = entry?.platforms
+      ? Object.entries(entry.platforms).flatMap(([p, vs]: any) =>
+          vs.map((v: any) => ({ id: v.id, platform: p, region: v.region }))
+        )
+      : [{ id: gameId, platform: game?.trophyTitlePlatform || "PSN" }];
+    const unique = Array.from(new Map(list.map((v) => [v.id, v])).values());
+    return contextModeStr !== "GLOBAL" && trophies?.trophyTitles
+      ? unique.filter((v) =>
+          trophies.trophyTitles.some(
+            (o: any) => String(o.npCommunicationId) === String(v.id)
+          )
+        )
+      : unique;
   }, [gameId, game, trophies, contextModeStr]);
 
-  // --- ANIMATION ---
   const scrollY = useRef(new Animated.Value(0)).current;
   const totalHeaderHeight = HEADER_HEIGHT + insets.top;
   const translateY = Animated.diffClamp(scrollY, 0, totalHeaderHeight).interpolate({
@@ -95,62 +122,27 @@ export default function GameScreen() {
     outputRange: [0, -totalHeaderHeight],
   });
 
-  // --- EFFECTS ---
-  useEffect(() => {
-    if (game && processedTrophies.length > 0) {
-      // Calculate totals from metadata (Available immediately from Context)
-      const def = game.definedTrophies ?? ZERO_COUNTS;
-      const earned = game.earnedTrophies ?? ZERO_COUNTS;
-
-      const totalCount =
-        (def.bronze ?? 0) + (def.silver ?? 0) + (def.gold ?? 0) + (def.platinum ?? 0);
-      const totalEarned =
-        (earned.bronze ?? 0) +
-        (earned.silver ?? 0) +
-        (earned.gold ?? 0) +
-        (earned.platinum ?? 0);
-
-      console.log("------------------------------------------------");
-      console.log(`🎮 GAME LOADED: ${game.trophyTitleName}`);
-      console.log(`   🆔 ID:       ${game.npCommunicationId}`);
-      console.log(`   🕹️ Platform: ${game.trophyTitlePlatform}`);
-      console.log(`   🏆 Stats:    ${totalEarned} / ${totalCount} Earned`);
-      console.log(`   📝 List:     ${processedTrophies.length} items rendered`); // This starts at 0, then updates
-      console.log("------------------------------------------------");
-    } else {
-      console.log(`⏳ [GameScreen] Searching Context for ID: ${gameId}...`);
-    }
-  }, [gameId, game, processedTrophies.length]);
-  useEffect(() => {
-    scrollY.setValue(0);
-    setCollapsedGroups(new Set());
-  }, [gameId, scrollY]); // 🟢 FIXED: Added scrollY dependency
-
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
   useEffect(() => {
-    if (!groupedData) return;
-    const completed = new Set<string>();
-    groupedData.forEach((g: any) => {
-      if (g.progress === 100) completed.add(g.id);
-    });
-    setCollapsedGroups(completed);
-  }, [groupedData]);
+    scrollY.setValue(0);
+    setCollapsedGroups(new Set());
+    setSearchText("");
+  }, [gameId]);
 
   const toggleGroup = (id: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
-      // 🟢 FIXED: Replaced ternary with if/else to satisfy linter
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
+
+  const shouldShowGroups =
+    sortMode === "DEFAULT" && groupedData && groupedData.length > 0;
 
   return (
     <View style={styles.container}>
@@ -171,7 +163,7 @@ export default function GameScreen() {
           onSortChange={setSortMode}
           sortDirection={sortDirection}
           onSortDirectionChange={() =>
-            setSortDirection((prev) => (prev === "ASC" ? "DESC" : "ASC"))
+            setSortDirection((p) => (p === "ASC" ? "DESC" : "ASC"))
           }
         />
       </Animated.View>
@@ -190,15 +182,14 @@ export default function GameScreen() {
         })}
         scrollEventThrottle={16}
       >
-        {/* 🟢 HERO: FIXED TYPES */}
         {game && (
           <GameHero
-            iconUrl={game.trophyTitleIconUrl ?? ""} // 🟢 FIXED
-            title={game.trophyTitleName ?? "Unknown Title"}
+            iconUrl={game.trophyTitleIconUrl ?? ""}
+            title={game.trophyTitleName ?? "Unknown"}
             platform={game.trophyTitlePlatform}
             progress={game.progress}
-            earnedTrophies={game.earnedTrophies ?? ZERO_COUNTS} // 🟢 FIXED
-            definedTrophies={game.definedTrophies ?? ZERO_COUNTS} // 🟢 FIXED
+            earnedTrophies={game.earnedTrophies ?? ZERO_COUNTS}
+            definedTrophies={game.definedTrophies ?? ZERO_COUNTS}
             displayArt={typeof artParam === "string" ? artParam : null}
             versions={versions}
             activeId={gameId}
@@ -206,53 +197,58 @@ export default function GameScreen() {
           />
         )}
 
-        {/* SKELETONS */}
+        {/* 🟢 SKELETONS WITH FIXED RESERVED SPACE.tsx] */}
         {showListSkeletons && (
           <View style={styles.skeletonContainer}>
+            {/* Reserved space set to 0 horizontal margin to match your fix */}
+            {hasDlc && sortMode === "DEFAULT" && (
+              <View
+                style={{
+                  height: 94,
+                  marginHorizontal: 0,
+                  marginBottom: 12,
+                  backgroundColor: "rgba(255,255,255,0.03)",
+                  borderRadius: 12,
+                }}
+              />
+            )}
             {Array.from({ length: 8 }).map((_, i) => (
               <TrophySkeleton key={i} />
             ))}
           </View>
         )}
 
-        {/* TROPHY LIST */}
+        {/* 🟢 LIST RENDER.tsx] */}
         {!showListSkeletons && (
-          <View>
-            {sortMode === "DEFAULT" && groupedData
-              ? groupedData.map((group: any) => {
-                  const isCollapsed = collapsedGroups.has(group.id);
-                  return (
-                    <View key={group.id}>
-                      <TrophyGroupHeader
-                        title={group.name}
-                        isBaseGame={group.isBaseGame}
-                        counts={group.counts}
-                        earnedCounts={group.earnedCounts}
-                        progress={group.progress}
-                        collapsed={isCollapsed}
-                        onToggle={() => toggleGroup(group.id)}
-                      />
-                      {!isCollapsed &&
-                        group.trophies.map((trophy: any) => (
-                          <TrophyCard
-                            key={trophy.trophyId}
-                            {...mapTrophyToProps(
-                              trophy,
-                              justEarnedIds,
-                              setSelectedTrophy
-                            )}
-                          />
-                        ))}
-                    </View>
-                  );
-                })
-              : processedTrophies.map((trophy: any) => (
+          <Animated.View style={{ opacity: listOpacity }}>
+            {shouldShowGroups
+              ? (groupedData as any[]).map((group: any) => (
+                  <View key={group.id}>
+                    <TrophyGroupHeader
+                      title={group.name}
+                      isBaseGame={group.isBaseGame}
+                      counts={group.counts}
+                      earnedCounts={group.earnedCounts}
+                      progress={group.progress}
+                      collapsed={collapsedGroups.has(group.id)}
+                      onToggle={() => toggleGroup(group.id)}
+                    />
+                    {!collapsedGroups.has(group.id) &&
+                      group.trophies.map((t: any) => (
+                        <TrophyCard
+                          key={t.trophyId}
+                          {...mapTrophyToProps(t, justEarnedIds, setSelectedTrophy)}
+                        />
+                      ))}
+                  </View>
+                ))
+              : processedTrophies.map((t: any) => (
                   <TrophyCard
-                    key={trophy.trophyId}
-                    {...mapTrophyToProps(trophy, justEarnedIds, setSelectedTrophy)}
+                    key={t.trophyId}
+                    {...mapTrophyToProps(t, justEarnedIds, setSelectedTrophy)}
                   />
                 ))}
-          </View>
+          </Animated.View>
         )}
       </Animated.ScrollView>
 
@@ -269,7 +265,6 @@ export default function GameScreen() {
   );
 }
 
-// 🟢 Helper to map props cleanly
 const mapTrophyToProps = (
   trophy: any,
   justEarnedIds: Set<number>,
@@ -284,8 +279,6 @@ const mapTrophyToProps = (
   earnedAt: trophy.earnedDateTime,
   rarity: trophy.trophyEarnedRate,
   justEarned: justEarnedIds.has(trophy.trophyId),
-  progressValue: trophy.trophyProgressValue,
-  progressTarget: trophy.trophyProgressTargetValue,
   onPress: () =>
     onSelect({
       name: trophy.trophyName,

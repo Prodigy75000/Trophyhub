@@ -2,21 +2,42 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const CACHE_KEY = "trophy_data_cache";
 
-export const saveTrophyCache = async (data: any) => {
+/**
+ * Saves trophy data to local storage.
+ */
+export const saveTrophyCache = async <T>(data: T): Promise<void> => {
   try {
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
+    const payload = JSON.stringify(data);
+    await AsyncStorage.setItem(CACHE_KEY, payload);
     console.log("💾 [Cache] Saved trophy data to disk");
   } catch (e) {
-    console.warn("Failed to save trophy cache", e);
+    console.error("❌ Failed to save trophy cache", e);
   }
 };
 
-export const loadTrophyCache = async () => {
+/**
+ * Loads trophy data from local storage.
+ * Returns null if no data exists or parsing fails.
+ */
+export const loadTrophyCache = async <T>(): Promise<T | null> => {
   try {
     const json = await AsyncStorage.getItem(CACHE_KEY);
-    return json ? JSON.parse(json) : null;
+    return json ? (JSON.parse(json) as T) : null;
   } catch (e) {
-    console.warn("Failed to load trophy cache", e);
+    console.error("❌ Failed to load trophy cache", e);
     return null;
+  }
+};
+
+/**
+ * Clears the trophy cache.
+ * Useful for logout or forced refresh.
+ */
+export const clearTrophyCache = async (): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(CACHE_KEY);
+    console.log("🧹 [Cache] Cleared trophy data");
+  } catch (e) {
+    console.error("❌ Failed to clear trophy cache", e);
   }
 };

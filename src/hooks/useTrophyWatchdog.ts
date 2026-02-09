@@ -1,4 +1,3 @@
-// hooks/useTrophyWatchdog.ts
 import { useEffect, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { PROXY_BASE_URL } from "../../config/endpoints";
@@ -19,6 +18,14 @@ export function useTrophyWatchdog({
   const lastTotalTrophiesRef = useRef<number>(-1);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
+  // 🟢 Fix: Store callback in ref to prevent effect re-running
+  const onNewTrophyDetectedRef = useRef(onNewTrophyDetected);
+
+  // Keep the ref updated with the latest callback
+  useEffect(() => {
+    onNewTrophyDetectedRef.current = onNewTrophyDetected;
+  }, [onNewTrophyDetected]);
+
   useEffect(() => {
     if (!accessToken || !accountId || !isReady) return;
 
@@ -28,23 +35,23 @@ export function useTrophyWatchdog({
           headers: { Authorization: `Bearer ${accessToken}` },
         });
 
-        // 🟢 DEBUG: Watch for the 401
         if (res.status === 401) {
-          console.log("🔒 [Watchdog] Token Expired (401). Waiting for app refresh...");
-          return; // Stop processing this attempt
+          console.log("🔒 [Watchdog] Token Expired (401). Pause polling.");
+          return;
         }
 
         const data = await res.json();
 
         if (data.earnedTrophies) {
           const newTotal =
-            data.earnedTrophies.bronze +
-            data.earnedTrophies.silver +
-            data.earnedTrophies.gold +
-            data.earnedTrophies.platinum;
+            (data.earnedTrophies.bronze || 0) +
+            (data.earnedTrophies.silver || 0) +
+            (data.earnedTrophies.gold || 0) +
+            (data.earnedTrophies.platinum || 0);
 
           const oldTotal = lastTotalTrophiesRef.current;
 
+          // Initialize baseline on first run
           if (oldTotal === -1) {
             lastTotalTrophiesRef.current = newTotal;
             return;
@@ -53,11 +60,12 @@ export function useTrophyWatchdog({
           if (newTotal > oldTotal) {
             console.log(`🏆 [Watchdog] Change detected: ${oldTotal} -> ${newTotal}`);
             lastTotalTrophiesRef.current = newTotal;
-            onNewTrophyDetected();
+            // Call the ref
+            onNewTrophyDetectedRef.current?.();
           }
         }
       } catch (e) {
-        console.warn("[Watchdog] Poll failed (Network/Server)", e);
+        console.warn("[Watchdog] Poll failed", e);
       }
     };
 
@@ -67,10 +75,10 @@ export function useTrophyWatchdog({
     // 2. Poll every 30 seconds
     const interval = setInterval(checkTrophyCount, 30000);
 
-    // 3. Check when App resumes
+    // 3. Listen for App Resume
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (appStateRef.current.match(/inactive|background/) && nextState === "active") {
-        console.log("📱 [Watchdog] App resumed, checking...");
+        console.log("📱 [Watchdog] App resumed, forcing check...");
         checkTrophyCount();
       }
       appStateRef.current = nextState;
@@ -80,7 +88,8 @@ export function useTrophyWatchdog({
       clearInterval(interval);
       subscription.remove();
     };
-  }, [accessToken, accountId, isReady, onNewTrophyDetected]); // Dependency array ensures restart on token change
+  }, [accessToken, accountId, isReady]);
+  // 🟢 Removed `onNewTrophyDetected` from dependency array to prevent loops
 
   const updateBaseline = (total: number) => {
     lastTotalTrophiesRef.current = total;

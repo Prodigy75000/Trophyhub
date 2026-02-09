@@ -1,3 +1,4 @@
+// src/hooks/context/useXboxLogic.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import { PROXY_BASE_URL } from "../../../config/endpoints";
@@ -12,12 +13,16 @@ const KEY_XBOX_PIC = "xbox_gamerpic";
 export function useXboxLogic() {
   const [xboxTitles, setXboxTitles] = useState<XboxTitle[]>([]);
   const [xboxProfile, setXboxProfile] = useState<XboxProfile | null>(null);
+
+  // Store tokens in state so we can use them for API calls
   const [xboxTokens, setXboxTokens] = useState<{ xsts: string; hash: string } | null>(
     null
   );
 
-  // 1. SAVE SESSION
+  // 1. SAVE SESSION (Login)
   const handleXboxLogin = useCallback(async (data: any) => {
+    console.log("🟢 Xbox Login Success:", data.gamertag);
+
     setXboxProfile({
       gamertag: data.gamertag,
       gamerpic: data.gamerpic,
@@ -34,9 +39,29 @@ export function useXboxLogic() {
     ]);
   }, []);
 
-  // 2. FETCH GAMES
+  // 2. LOGOUT (Clear Session)
+  const logoutXbox = useCallback(async () => {
+    console.log("👋 Logging out of Xbox...");
+    try {
+      await AsyncStorage.multiRemove([
+        KEY_XBOX_GT,
+        KEY_XBOX_PIC,
+        KEY_XBOX_XUID,
+        KEY_XBOX_XSTS,
+        KEY_XBOX_HASH,
+      ]);
+      setXboxProfile(null);
+      setXboxTokens(null);
+      setXboxTitles([]);
+    } catch (e) {
+      console.warn("Error clearing Xbox storage", e);
+    }
+  }, []);
+
+  // 3. FETCH GAMES (Titles)
   const fetchXboxGames = useCallback(
     async (overrides?: { xuid: string; xsts: string; hash: string }) => {
+      // Use overrides (from immediate login) or state (from session)
       const targetXuid = overrides?.xuid || xboxProfile?.xuid;
       const targetXsts = overrides?.xsts || xboxTokens?.xsts;
       const targetHash = overrides?.hash || xboxTokens?.hash;
@@ -48,7 +73,8 @@ export function useXboxLogic() {
 
       try {
         console.log(`🟢 Fetching Xbox Games for ${targetXuid}...`);
-        const res = await fetch(`${PROXY_BASE_URL}/xbox/titles`, {
+        // Note: Ensure your backend route matches this exactly
+        const res = await fetch(`${PROXY_BASE_URL}/api/xbox/titles`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -58,19 +84,21 @@ export function useXboxLogic() {
           }),
         });
 
-        const data = await res.json();
-        console.log(`✅ Xbox Games Fetched: ${data.titles?.length || 0} titles`);
+        if (!res.ok) throw new Error(`Xbox API Error: ${res.status}`);
 
-        // If the API returns titles, we can save them to state here
-        if (data.titles) setXboxTitles(data.titles);
+        const data = await res.json();
+        const titles = data.titles || [];
+        console.log(`✅ Xbox Games Fetched: ${titles.length} titles`);
+
+        setXboxTitles(titles);
       } catch (e) {
-        console.error("Xbox Fetch Error:", e);
+        console.error("❌ Xbox Fetch Error:", e);
       }
     },
     [xboxProfile, xboxTokens]
   );
 
-  // 3. RESTORE SESSION
+  // 4. RESTORE SESSION ON MOUNT
   useEffect(() => {
     const loadSession = async () => {
       try {
@@ -82,10 +110,17 @@ export function useXboxLogic() {
           KEY_XBOX_HASH,
         ]);
 
-        const [gt, pic, xuid, xsts, hash] = values.map((v) => v[1]);
+        // Helper to get value safely
+        const getVal = (key: string) => values.find((pair) => pair[0] === key)?.[1];
+
+        const gt = getVal(KEY_XBOX_GT);
+        const pic = getVal(KEY_XBOX_PIC);
+        const xuid = getVal(KEY_XBOX_XUID);
+        const xsts = getVal(KEY_XBOX_XSTS);
+        const hash = getVal(KEY_XBOX_HASH);
 
         if (gt && xuid && xsts && hash) {
-          console.log("✅ Xbox Session Restored:", gt);
+          console.log("💾 Xbox Session Restored:", gt);
           setXboxProfile({ gamertag: gt, gamerpic: pic || "", xuid });
           setXboxTokens({ xsts, hash });
         }
@@ -100,8 +135,10 @@ export function useXboxLogic() {
     xboxTitles,
     setXboxTitles,
     xboxProfile,
+    xboxTokens,
     setXboxProfile,
     handleXboxLogin,
     fetchXboxGames,
+    logoutXbox,
   };
 }

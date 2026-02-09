@@ -1,8 +1,10 @@
-// components/SideMenu.styles.ts
+// src/styles/SideMenu.styles.ts
 import { StyleSheet } from "react-native";
 
 export const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0a0b0f" },
+
+  // Header Profile Section
   header: {
     paddingHorizontal: 20,
     paddingBottom: 24,
@@ -34,6 +36,13 @@ export const styles = StyleSheet.create({
   levelText: { color: "#ffd700", fontSize: 12, fontWeight: "800", marginLeft: 4 },
 
   // --- Auth Buttons ---
+  authButtonsContainer: {
+    gap: 10,
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  // PSN Button (Blue)
   webButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -50,6 +59,26 @@ export const styles = StyleSheet.create({
     elevation: 4,
   },
   webButtonText: { color: "white", fontSize: 14, fontWeight: "600" },
+
+  // 🟢 NEW: Xbox Button (Green)
+  xboxButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#107c10", // Official Xbox Green
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  xboxButtonText: { color: "white", fontSize: 14, fontWeight: "600" },
+
+  // Guest Button (Transparent/Grey)
   guestButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -62,7 +91,7 @@ export const styles = StyleSheet.create({
   },
   guestButtonText: { color: "#ccc", fontSize: 14, fontWeight: "600" },
 
-  // 🟢 RED SIGN OUT BUTTON (Restored)
+  // Sign Out Button
   signOutButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -106,7 +135,14 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 14,
   },
+  iconBoxHome: {
+    backgroundColor: "rgba(77, 163, 255, 0.1)",
+  },
+  iconBoxSettings: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+  },
   menuText: { flex: 1, color: "white", fontSize: 15, fontWeight: "500" },
+  menuTextInactive: { color: "#888" },
   subText: { color: "#666", fontSize: 11, marginTop: 2 },
   divider: {
     height: 1,
@@ -124,57 +160,8 @@ export const styles = StyleSheet.create({
   footerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 15,
-  },
-  devActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  // 🟢 NEW: Specific Footer Buttons
-  devButtonPSN: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 67, 156, 0.15)", // PS Blue tint
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(0, 67, 156, 0.3)",
-  },
-  devButtonXbox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(16, 124, 16, 0.15)", // Xbox Green tint
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(16, 124, 16, 0.3)",
-  },
-  devTextPSN: {
-    color: "#4da3ff",
-    fontSize: 11,
-    fontWeight: "700",
-    marginLeft: 6,
-  },
-  devTextXbox: {
-    color: "#107c10", // Xbox Green
-    fontSize: 11,
-    fontWeight: "700",
-    marginLeft: 6,
+    justifyContent: "center", // Centered since buttons are gone
+    marginBottom: 0,
   },
   versionText: { color: "#444", fontSize: 11, textAlign: "center" },
-
-  // Modal
-  modalContainer: { flex: 1, backgroundColor: "#101010" },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 15,
-    borderBottomWidth: 1,
-    borderColor: "#333",
-  },
-  modalTitle: { color: "white", fontWeight: "bold", fontSize: 16 },
-  modalClose: { color: "#4da3ff", fontWeight: "bold", fontSize: 16 },
 });

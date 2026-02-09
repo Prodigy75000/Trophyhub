@@ -1,16 +1,16 @@
-// components/trophies/TrophyListHeader.styles.ts
+// src/styles/HeaderActionBar.styles.ts
 import { StyleSheet } from "react-native";
 
 export const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingBottom: 12,
-    paddingVertical: 6,
+    paddingTop: 12,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 8,
   },
   iconBtn: {
     width: 40,
@@ -22,10 +22,13 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#333",
   },
-  // 🟢 NEW: Style for the active state of the sort button
-  iconBtnActive: {
+  btnActive: {
     backgroundColor: "rgba(77, 163, 255, 0.1)",
-    borderColor: "#4da3ff", // Optional: adds a nice border highlight too
+    borderColor: "#4da3ff",
+  },
+  centered: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   searchContainer: {
     flex: 1,
@@ -38,18 +41,11 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#333",
   },
-  // 🟢 NEW: Style for active search focus
-  searchContainerActive: {
-    borderColor: "#4da3ff",
-    backgroundColor: "rgba(77, 163, 255, 0.1)",
-  },
-  // 🟢 NEW: Margin for the search icon
-  searchIcon: {
-    marginRight: 8,
-  },
   input: {
     flex: 1,
     color: "white",
+    paddingBottom: 4,
+    paddingTop: 0,
     fontSize: 15,
   },
   modalOverlay: {
@@ -79,6 +75,12 @@ export const styles = StyleSheet.create({
     marginVertical: 8,
     textTransform: "uppercase",
   },
+  divider: {
+    height: 1,
+    backgroundColor: "#333",
+    marginVertical: 4,
+    marginHorizontal: 8,
+  },
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -87,26 +89,57 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
   },
-  // 🟢 NEW: General purpose row for inside the menu items
-  itemRow: {
+  optionSelected: {
+    backgroundColor: "rgba(77, 163, 255, 0.1)",
+  },
+  optionContent: {
     flexDirection: "row",
     alignItems: "center",
   },
-  // 🟢 NEW: Standard spacing for list icons
-  itemIcon: {
+  optionIcon: {
     marginRight: 12,
-  },
-  optionSelected: {
-    backgroundColor: "rgba(77, 163, 255, 0.1)",
   },
   optionText: {
     color: "white",
     fontSize: 15,
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#333",
-    marginVertical: 4,
-    marginHorizontal: 8,
+  badge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#4da3ff",
+    borderWidth: 1.5,
+    borderColor: "#1c1c26",
+  },
+  tinyLabel: {
+    fontSize: 7,
+    color: "#888",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    textAlign: "center",
+    maxWidth: 36,
+  },
+
+  // Platform Toggle Styles
+  platformRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+  },
+  platToggle: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    minWidth: 48,
+    alignItems: "center",
+  },
+  platText: {
+    fontWeight: "bold",
+    fontSize: 11,
   },
 });

@@ -32,6 +32,7 @@ export const TrophyProvider = ({ children }: { children: React.ReactNode }) => {
 
   const handleLogout = async () => {
     await psn.logout();
+    await xbox.logoutXbox();
     data.setTrophies(null);
     xbox.setXboxTitles([]);
     xbox.setXboxProfile(null);

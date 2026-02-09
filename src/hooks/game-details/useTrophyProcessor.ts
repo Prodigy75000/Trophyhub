@@ -1,68 +1,78 @@
-import { GameCounts, GameVersion, XboxTitle } from "./types";
+import { useMemo } from "react";
 
-// Helper for PSN Counts
-const getPsnCounts = (game: any): GameCounts => ({
-  total:
-    (game.definedTrophies?.bronze || 0) +
-    (game.definedTrophies?.silver || 0) +
-    (game.definedTrophies?.gold || 0) +
-    (game.definedTrophies?.platinum || 0),
-  bronze: game.definedTrophies?.bronze || 0,
-  silver: game.definedTrophies?.silver || 0,
-  gold: game.definedTrophies?.gold || 0,
-  platinum: game.definedTrophies?.platinum || 0,
-  earnedBronze: game.earnedTrophies?.bronze || 0,
-  earnedSilver: game.earnedTrophies?.silver || 0,
-  earnedGold: game.earnedTrophies?.gold || 0,
-  earnedPlatinum: game.earnedTrophies?.platinum || 0,
-});
+export function useTrophyProcessor(
+  localTrophies: any[],
+  masterRecord: any,
+  gameObject: any,
+  searchText: string,
+  sortMode: string,
+  sortDirection: "ASC" | "DESC"
+) {
+  return useMemo(() => {
+    let baseList: any[] = [];
+    let source = "NONE";
 
-// Helper for Xbox Counts
-const getXboxCounts = (game: XboxTitle): GameCounts => ({
-  total: game.achievement.totalGamerscore,
-  earned: game.achievement.currentGamerscore, // The special field
-  bronze: 0,
-  silver: 0,
-  gold: 0,
-  platinum: 0,
-  earnedBronze: 0,
-  earnedSilver: 0,
-  earnedGold: 0,
-  earnedPlatinum: 0,
-});
+    // PRIORITY 1: API Fetch (Live status)
+    if (localTrophies && localTrophies.length > 0) {
+      baseList = localTrophies;
+      source = "API";
+    }
+    // PRIORITY 2: Master Data (Fallback for blank screens)
+    else if (masterRecord?.trophies && masterRecord.trophies.length > 0) {
+      baseList = masterRecord.trophies.map((t: any) => ({
+        trophyId: t.id,
+        trophyName: t.name,
+        trophyDetail: t.detail,
+        trophyIconUrl: t.iconUrl,
+        trophyType: t.type,
+        trophyEarnedRate: t.rarity || "0.0",
+        earned: false,
+      }));
+      source = "MASTER";
+    }
+    // PRIORITY 3: Context (Summary)
+    else if (gameObject?.trophyList) {
+      baseList = gameObject.trophyList;
+      source = "CONTEXT";
+    }
 
-export function useTrophyProcessor() {
-  const processPsnGame = (game: any): GameVersion => {
-    return {
-      id: game.npCommunicationId,
-      platform: normalizePlatform(game.trophyTitlePlatform),
-      progress: game.progress,
-      lastPlayed: game.lastUpdatedDateTime,
-      counts: getPsnCounts(game),
-      isOwned: true,
-    };
-  };
+    console.log(`📊 [Processor] Source: ${source}, Items: ${baseList.length}`);
 
-  const processXboxGame = (game: XboxTitle): GameVersion => {
-    return {
-      id: game.titleId,
-      platform: "XBOX",
-      progress: game.achievement.progressPercentage,
-      lastPlayed: game.lastUnlock,
-      counts: getXboxCounts(game),
-      isOwned: true,
-    };
-  };
+    let list = [...baseList];
 
-  return { processPsnGame, processXboxGame };
+    // Filter
+    if (searchText) {
+      list = list.filter((t) =>
+        t.trophyName?.toLowerCase().includes(searchText.toLowerCase())
+      );
+    }
+
+    // Sort
+    list.sort((a, b) => {
+      const dir = sortDirection === "ASC" ? 1 : -1;
+
+      if (sortMode === "RARITY") {
+        const valA = parseFloat(a.trophyEarnedRate ?? "100");
+        const valB = parseFloat(b.trophyEarnedRate ?? "100");
+        return (valA - valB) * dir;
+      }
+
+      if (sortMode === "DATE_EARNED") {
+        const timeA =
+          a.earned && a.earnedDateTime ? new Date(a.earnedDateTime).getTime() : 0;
+        const timeB =
+          b.earned && b.earnedDateTime ? new Date(b.earnedDateTime).getTime() : 0;
+        if (timeA === 0 && timeB > 0) return 1;
+        if (timeB === 0 && timeA > 0) return -1;
+        return (timeA - timeB) * dir;
+      }
+
+      // Default: Sort by ID (Safe Parse)
+      const idA = parseInt(String(a.trophyId || "0"), 10);
+      const idB = parseInt(String(b.trophyId || "0"), 10);
+      return (idA - idB) * dir;
+    });
+
+    return list;
+  }, [localTrophies, masterRecord, gameObject, searchText, sortMode, sortDirection]);
 }
-
-// Simple Helper
-const normalizePlatform = (raw: string) => {
-  if (!raw) return "UNKNOWN";
-  const p = raw.toUpperCase();
-  if (p.includes("PS5")) return "PS5";
-  if (p.includes("PS4")) return "PS4";
-  if (p.includes("VITA")) return "PSVITA";
-  return p;
-};

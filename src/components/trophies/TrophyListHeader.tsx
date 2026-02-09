@@ -19,6 +19,47 @@ type Props = {
   onSortDirectionChange: () => void;
 };
 
+// Moved outside to prevent re-creation
+const SortOption = ({
+  label,
+  value,
+  icon,
+  currentMode,
+  onSelect,
+}: {
+  label: string;
+  value: TrophySortMode;
+  icon: keyof typeof Ionicons.glyphMap;
+  currentMode: TrophySortMode;
+  onSelect: (m: TrophySortMode) => void;
+}) => {
+  const isSelected = currentMode === value;
+  return (
+    <TouchableOpacity
+      style={[styles.optionRow, isSelected && styles.optionSelected]}
+      onPress={() => onSelect(value)}
+    >
+      <View style={styles.itemRow}>
+        <Ionicons
+          name={icon}
+          size={20}
+          color={isSelected ? "#4da3ff" : "#888"}
+          style={styles.itemIcon}
+        />
+        <Text
+          style={[
+            styles.optionText,
+            isSelected && { color: "#4da3ff", fontWeight: "bold" },
+          ]}
+        >
+          {label}
+        </Text>
+      </View>
+      {isSelected && <Ionicons name="checkmark" size={20} color="#4da3ff" />}
+    </TouchableOpacity>
+  );
+};
+
 export default function TrophyListHeader({
   onBack,
   onSearch,
@@ -31,46 +72,33 @@ export default function TrophyListHeader({
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [isSearchActive, setIsSearchActive] = useState(false);
 
-  // Helper to render sort options
-  const SortOption = ({ label, value, icon }: any) => (
-    <TouchableOpacity
-      style={[styles.optionRow, sortMode === value && styles.optionSelected]}
-      onPress={() => {
-        onSortChange(value);
-        setShowSortMenu(false);
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Ionicons
-          name={icon}
-          size={20}
-          color={sortMode === value ? "#4da3ff" : "#888"}
-          style={{ marginRight: 12 }}
-        />
-        <Text
-          style={[
-            styles.optionText,
-            sortMode === value && { color: "#4da3ff", fontWeight: "bold" },
-          ]}
-        >
-          {label}
-        </Text>
-      </View>
-      {sortMode === value && <Ionicons name="checkmark" size={20} color="#4da3ff" />}
-    </TouchableOpacity>
-  );
+  const handleSortSelect = (mode: TrophySortMode) => {
+    onSortChange(mode);
+    setShowSortMenu(false);
+  };
 
   return (
     <View style={styles.container}>
       <View style={styles.row}>
         {/* BACK BUTTON */}
-        <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.iconBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
 
         {/* SEARCH BAR */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={18} color="#666" style={{ marginRight: 8 }} />
+        <View
+          style={[styles.searchContainer, isSearchActive && styles.searchContainerActive]}
+        >
+          <Ionicons
+            name="search"
+            size={18}
+            color={isSearchActive ? "#4da3ff" : "#666"}
+            style={styles.searchIcon}
+          />
           <TextInput
             placeholder="Search trophies..."
             placeholderTextColor="#666"
@@ -78,16 +106,15 @@ export default function TrophyListHeader({
             onChangeText={onSearch}
             onFocus={() => setIsSearchActive(true)}
             onBlur={() => setIsSearchActive(false)}
+            returnKeyType="search"
           />
         </View>
 
         {/* SORT BUTTON */}
         <TouchableOpacity
           onPress={() => setShowSortMenu(true)}
-          style={[
-            styles.iconBtn,
-            sortMode !== "DEFAULT" && { backgroundColor: "rgba(77, 163, 255, 0.1)" },
-          ]}
+          style={[styles.iconBtn, sortMode !== "DEFAULT" && styles.iconBtnActive]}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons
             name="swap-vertical"
@@ -108,10 +135,41 @@ export default function TrophyListHeader({
           <View style={[styles.menuContainer, { top: insets.top + 60 }]}>
             <Text style={styles.menuHeader}>Sort Trophies</Text>
 
-            <SortOption label="Default Order" value="DEFAULT" icon="list" />
-            <SortOption label="Rarity" value="RARITY" icon="diamond-outline" />
-            <SortOption label="Date Earned" value="DATE_EARNED" icon="calendar-outline" />
-            <SortOption label="Earned Status" value="STATUS" icon="checkbox-outline" />
+            <SortOption
+              label="Default Order"
+              value="DEFAULT"
+              icon="list"
+              currentMode={sortMode}
+              onSelect={handleSortSelect}
+            />
+            <SortOption
+              label="Rarity"
+              value="RARITY"
+              icon="diamond-outline"
+              currentMode={sortMode}
+              onSelect={handleSortSelect}
+            />
+            <SortOption
+              label="Date Earned"
+              value="DATE_EARNED"
+              icon="calendar-outline"
+              currentMode={sortMode}
+              onSelect={handleSortSelect}
+            />
+            <SortOption
+              label="Earned Status"
+              value="STATUS"
+              icon="checkbox-outline"
+              currentMode={sortMode}
+              onSelect={handleSortSelect}
+            />
+            <SortOption
+              label="Name (A-Z)"
+              value="NAME"
+              icon="text-outline"
+              currentMode={sortMode}
+              onSelect={handleSortSelect}
+            />
 
             <View style={styles.divider} />
 
@@ -122,15 +180,24 @@ export default function TrophyListHeader({
                 setShowSortMenu(false);
               }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View style={styles.itemRow}>
                 <Ionicons
-                  name="swap-vertical"
+                  name="arrow-up"
                   size={20}
                   color="white"
-                  style={{ marginRight: 12 }}
+                  style={[
+                    styles.itemIcon,
+                    {
+                      transform: [
+                        { rotate: sortDirection === "ASC" ? "0deg" : "180deg" },
+                      ],
+                    },
+                  ]}
                 />
                 <Text style={styles.optionText}>
-                  Order: {sortDirection === "ASC" ? "Ascending ⬆️" : "Descending ⬇️"}
+                  {sortDirection === "ASC"
+                    ? "Ascending (Low → High)"
+                    : "Descending (High → Low)"}
                 </Text>
               </View>
             </TouchableOpacity>

@@ -1,23 +1,13 @@
-// src/hooks/game-details/types.ts
+// src/types/GameTypes.ts
+import { XboxTitle } from "./XboxTypes";
 
-// 1. Xbox Types
-export interface XboxTitle {
-  titleId: string;
-  name: string;
-  displayImage: string;
-  devices: string[];
-  achievement: {
-    currentAchievements: number;
-    totalAchievements: number;
-    currentGamerscore: number;
-    totalGamerscore: number;
-    progressPercentage: number;
-  };
-
-  lastUnlock: string;
+// 🟢 NEW: Type for the regional variants within a platform
+export interface MasterGameVariant {
+  id: string;
+  region?: string | null;
 }
 
-// 2. Master DB Types
+// --- Master DB Types ---
 export interface MasterGameEntry {
   canonicalId: string;
   displayName: string;
@@ -34,16 +24,14 @@ export interface MasterGameEntry {
     platinum: number;
     total: number;
   };
-  linkedVersions?: {
-    platform: string;
-    npCommunicationId?: string;
-    titleId?: string;
-    region?: string;
-  }[];
+  // 🟢 UPDATED: Dictionary structure instead of an array
+  platforms?: {
+    [platformName: string]: MasterGameVariant[];
+  };
   tags?: string[];
 }
 
-// 3. Trophy Data Types
+// --- Trophy Data Types ---
 export interface GameTrophy {
   trophyId: number;
   trophyName: string;
@@ -59,12 +47,14 @@ export interface GameTrophy {
 
 export interface TrophyGroup {
   trophyGroupId: string;
-  trophyGroupName: string;
+  // 🟢 UPDATED: Fields for DLC Name mapping
+  trophyGroupName?: string; // Modern API
+  groupName?: string; // Master/Legacy fallback
   trophyGroupIconUrl: string;
   trophyIds: number[];
 }
 
-// 🟢 4. EXPORTED HELPER TYPES (Fixes useTrophyFilter errors)
+// --- Helper Types for Processing ---
 export interface GameCounts {
   total: number;
   bronze: number;
@@ -85,32 +75,34 @@ export interface GameVersion {
   progress: number;
   lastPlayed?: string | null;
   counts: GameCounts;
+  // 🟢 ADDED: Required for GameCard/Grid fallbacks
+  masterStats?: {
+    bronze: number;
+    silver: number;
+    gold: number;
+    platinum: number;
+    total: number;
+  };
   isOwned: boolean;
 }
 
-// 🟢 5. THE UNIFIED GAME TYPE (Fixes [id].tsx errors)
-// This matches what useGameDetails returns and what your UI expects.
+// --- The Unified Game Type ---
 export interface UnifiedGame {
   source: "USER" | "MASTER" | "XBOX";
-  id: string; // Generic ID (NPWR or TitleID)
+  id: string;
 
-  // Display Info
   trophyTitleName: string;
   trophyTitlePlatform: string;
   trophyTitleIconUrl?: string;
 
-  // Data Lists
   trophyList?: GameTrophy[];
 
-  // PSN Specifics (Optional but accessed by UI)
   npCommunicationId?: string;
   definedTrophies?: { bronze: number; silver: number; gold: number; platinum: number };
   earnedTrophies?: { bronze: number; silver: number; gold: number; platinum: number };
 
-  // Shared
   progress: number;
 
-  // Xbox Specifics (Optional)
   originalXbox?: XboxTitle;
   masterData?: MasterGameEntry;
 }

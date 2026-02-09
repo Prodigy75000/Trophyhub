@@ -1,12 +1,12 @@
+// server.cjs
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const fs = require("fs");
 const { Buffer } = require("buffer");
 
-// 🟢 NEW IMPORTS (Refactor)  
-const { fetchPSN } = require("./src/utils/psnClient");
-const trophyController = require("./src/controllers/trophyController");
+// 🟢 NEW IMPORTS
+const { fetchPSN } = require("./psnClient");
+const trophyController = require("./trophyController");
 
 // PSN Library Imports
 const {
@@ -17,7 +17,6 @@ const {
 
 // Config
 dotenv.config();
-const { getServiceAuth } = require("./config/psn");
 const AZURE_CLIENT_ID = "5e278654-b281-411b-85f4-eb7fb056e5ba";
 
 const app = express();
@@ -51,7 +50,7 @@ function requireBearer(req, res, next) {
 // ROUTES
 // ---------------------------------------------------------------------------
 
-// 🟢 1. XBOX ROUTES (Kept As-Is)
+// 🟢 1. XBOX ROUTES
 app.post("/xbox/titles", async (req, res) => {
   const { xuid, xstsToken, userHash } = req.body;
   if (!xuid || !xstsToken || !userHash) {
@@ -162,15 +161,6 @@ app.post("/xbox/exchange", async (req, res) => {
 });
 
 // 🟢 2. AUTH ROUTES
-app.get("/api/login", async (req, res) => {
-  try {
-    const auth = await getServiceAuth();
-    res.json(auth);
-  } catch (err) {
-    res.status(500).json({ error: "PSN Login Failed", details: err.message });
-  }
-});
-
 app.post("/api/auth/refresh", async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -257,9 +247,8 @@ app.get("/api/user/summary/:accountId", requireBearer, async (req, res) => {
   }
 });
 
-// 🟢 4. TROPHY ROUTES (Uses New Controller)
+// 🟢 4. TROPHY ROUTES
 app.get("/api/trophies/:accountId", requireBearer, trophyController.getGameList);
-
 app.get(
   "/api/trophies/:accountId/:npCommunicationId",
   requireBearer,

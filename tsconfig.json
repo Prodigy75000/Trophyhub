@@ -12,6 +12,6 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
-    "src/utils/trophyHelpers.js"
+    "server/trophyHelpers.js"
   ]
 }

@@ -5,6 +5,7 @@ import { Alert } from "react-native";
 import { PROXY_BASE_URL } from "../../../config/endpoints";
 import { useTrophy } from "../../../providers/TrophyContext";
 
+import { makeRedirectUri } from "expo-auth-session";
 const CLIENT_ID = "5e278654-b281-411b-85f4-eb7fb056e5ba";
 
 // 🟢 Helper to match the redirect URI exactly
@@ -39,6 +40,9 @@ export function useXboxAuth() {
   );
 
   const { handleXboxLogin, fetchXboxGames } = useTrophy();
+
+  const redirectUri = makeRedirectUri({ scheme: "your-scheme-here" });
+  console.log("👉 MY REDIRECT URI:", redirectUri);
 
   useEffect(() => {
     const handleExchange = async () => {

@@ -1,36 +1,34 @@
+// src/hooks/game-details/useGameIdentifier.ts
 import { useMemo } from "react";
 import masterGamesRaw from "../../../data/master_games.json";
 import { useTrophy } from "../../../providers/TrophyContext";
 import { UnifiedGame } from "../../types/GameTypes";
 
-export function useGameIdentifier(id: string) {
-  const { trophies, xboxTitles } = useTrophy();
+/**
+ * Resolves the master record and creates a unified game object.
+ * Accepts trophies as an optional second argument to force reactivity
+ * when the global context updates.
+ */
+export function useGameIdentifier(id: string, trophiesArg?: any) {
+  const { trophies: contextTrophies, xboxTitles } = useTrophy();
+
+  // Prioritize passed argument for immediate reactivity
+  const trophies = trophiesArg || contextTrophies;
 
   return useMemo(() => {
     if (!id) return { gameObject: null, masterRecord: null };
 
-    // 🟢 1. ID SANITIZATION (Fixes Borderlands 2)
+    // 🟢 1. ID SANITIZATION
     const cleanId = String(id).trim();
-    const baseId = cleanId.split("_")[0]; // "NPWR12345_00" -> "NPWR12345"
+    const baseId = cleanId.split("_")[0];
 
-    console.log(`\n🔍 [Identifier] Looking for: "${baseId}`);
-
-    // 🟢 2. MASTER RECORD LOOKUP (Robust)
+    // 🟢 2. MASTER RECORD LOOKUP
     const master = (masterGamesRaw as any[]).find((m) => {
-      // A. Direct Canonical Match
-      if (String(m.canonicalId) === cleanId) return true;
-      if (String(m.canonicalId) === baseId) return true;
-
-      // B. Linked Versions (Legacy Array)
-      if (
-        m.linkedVersions?.some(
-          (v: any) =>
-            String(v.npCommunicationId) === cleanId || String(v.titleId) === cleanId
-        )
-      )
+      // Direct Canonical Match
+      if (String(m.canonicalId) === cleanId || String(m.canonicalId) === baseId)
         return true;
 
-      // C. Platforms (New Object Structure)
+      // Platforms dictionary check (New Structure)
       if (m.platforms) {
         return Object.values(m.platforms).some(
           (platformList: any) =>
@@ -43,15 +41,11 @@ export function useGameIdentifier(id: string) {
       return false;
     });
 
-    if (master) {
-      console.log(`   ✅ Match Found: "${master.displayName}"`);
-    } else {
-      console.warn(`   ❌ No Match in Master DB for "${cleanId}"`);
-    }
-
     // 🟢 3. CHECK USER OWNERSHIP (PSN)
+    // This block is now reactive to the 'trophies' object to update the Hero bar [cite: 8]
     const psnGame = trophies?.trophyTitles?.find(
-      (t: any) => String(t.npCommunicationId) === cleanId
+      (t: any) =>
+        String(t.npCommunicationId) === cleanId || String(t.npCommunicationId) === baseId
     );
 
     if (psnGame) {
@@ -63,7 +57,7 @@ export function useGameIdentifier(id: string) {
           trophyTitleName: psnGame.trophyTitleName,
           trophyTitlePlatform: psnGame.trophyTitlePlatform,
           trophyTitleIconUrl: psnGame.trophyTitleIconUrl,
-          trophyList: psnGame.trophies || [], // Often empty summary
+          trophyList: psnGame.trophies || [],
           definedTrophies: psnGame.definedTrophies,
           earnedTrophies: psnGame.earnedTrophies,
           progress: psnGame.progress,
@@ -93,7 +87,6 @@ export function useGameIdentifier(id: string) {
     }
 
     // 🟢 5. FALLBACK (Global/Master Only)
-    // This ensures we always have a game object to render, even if the user doesn't own it
     if (master) {
       const mappedTrophies = (master.trophies || []).map((t: any) => ({
         trophyId: t.id,
@@ -123,5 +116,5 @@ export function useGameIdentifier(id: string) {
     }
 
     return { gameObject: null, masterRecord: null };
-  }, [id, trophies, xboxTitles]);
+  }, [id, trophies, xboxTitles]); // 🟢 Listens to trophies for automatic Hero updates [cite: 9]
 }

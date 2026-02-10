@@ -1,5 +1,7 @@
 // src/hooks/game-details/useGameDetails.ts
 import { useEffect } from "react";
+// 🟢 PATH FIX: Go up 3 levels to reach the providers folder
+import { useTrophy } from "../../../providers/TrophyContext";
 import { useGameFetcher } from "./useGameFetcher";
 import { useGameIdentifier } from "./useGameIdentifier";
 import { useTrophyGrouper } from "./useTrophyGrouper";
@@ -11,11 +13,13 @@ export function useGameDetails(
   sortMode: "DEFAULT" | "RARITY" | "DATE_EARNED" = "DEFAULT",
   sortDirection: "ASC" | "DESC" = "ASC"
 ) {
+  const { trophies } = useTrophy();
+
   // 1. IDENTIFY GAME
-  const { gameObject, masterRecord } = useGameIdentifier(id);
+  // 🟢 No longer errors because we updated the function signature above
+  const { gameObject, masterRecord } = useGameIdentifier(id, trophies);
 
   // 2. FETCH DATA
-  // We extract the setters but we will memoize the reset logic
   const {
     localTrophies,
     setLocalTrophies,
@@ -26,17 +30,13 @@ export function useGameDetails(
     onRefresh,
   } = useGameFetcher(id, gameObject);
 
-  // 🟢 FIXED: STABLE RESET LOGIC
-  // We wrap the reset in a stable function to prevent the infinite loop.
-  // We only want this to run when the 'id' itself changes.
+  // 🟢 STABLE RESET LOGIC
   useEffect(() => {
     if (id) {
-      // Clear the trophies and groups immediately to show skeletons
       if (typeof setLocalTrophies === "function") setLocalTrophies([]);
       if (typeof setTrophyGroups === "function") setTrophyGroups([]);
     }
-    // We intentionally omit the setters from dependencies to break the loop
-    // because function references from custom hooks can be unstable.
+    // We omit setters from deps to prevent the "Maximum update depth" loop
   }, [id]);
 
   // 3. PROCESS LIST

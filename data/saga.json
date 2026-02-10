@@ -1,0 +1,106 @@
+[
+  {
+    "sagaId": "gta-mainline",
+    "displayName": "Grand Theft Auto",
+    "developerId": "rockstar-games",
+    "members": [
+      {
+        "stepId": "gta-3",
+        "title": "Grand Theft Auto III",
+        "ids": ["game_grandtheftauto3", "game_grandtheftautoiiidefed"],
+        "order": 1
+      },
+      {
+        "stepId": "gta-vc",
+        "title": "Grand Theft Auto: Vice City",
+        "ids": ["game_grandtheftautovicecity", "game_grandtheftautovcdefed"],
+        "order": 2
+      },
+      {
+        "stepId": "gta-4",
+        "title": "Grand Theft Auto IV",
+        "ids": ["game_grandtheftautoiv"],
+        "order": 3
+      },
+      {
+        "stepId": "gta-5",
+        "title": "Grand Theft Auto V",
+        "ids": ["game_grandtheftautov"],
+        "order": 4
+      }
+    ]
+  },
+  {
+    "sagaId": "fnaf-mainline",
+    "displayName": "Five Nights at Freddy's",
+    "developerId": "steel-wool-studios",
+    "members": [
+      {
+        "stepId": "fnaf-1",
+        "title": "Five Nights at Freddy's",
+        "ids": ["game_fnaf1"],
+        "order": 1
+      },
+      {
+        "stepId": "fnaf-2",
+        "title": "Five Nights at Freddy's 2",
+        "ids": ["game_fnaf2"],
+        "order": 2
+      },
+      {
+        "stepId": "fnaf-3",
+        "title": "Five Nights at Freddy's 3",
+        "ids": ["game_fnaf3"],
+        "order": 3
+      },
+      {
+        "stepId": "fnaf-4",
+        "title": "Five Nights at Freddy's 4",
+        "ids": ["game_fnaf4"],
+        "order": 4
+      },
+      {
+        "stepId": "fnaf-sl",
+        "title": "Five Nights at Freddy's: Sister Location",
+        "ids": ["game_fnaf_sisterlocation"],
+        "order": 5
+      },
+      {
+        "stepId": "fnaf-ps",
+        "title": "Freddy Fazbear's Pizzeria Simulator",
+        "ids": ["game_fnaf_pizzeriasimulator"],
+        "order": 6
+      },
+      {
+        "stepId": "fnaf-ucn",
+        "title": "Ultimate Custom Night",
+        "ids": ["game_fnaf_ultimatecustomnight"],
+        "order": 7
+      },
+      {
+        "stepId": "fnaf-hw",
+        "title": "Five Nights at Freddy's: Help Wanted",
+        "ids": ["game_fnaf_helpwanted"],
+        "order": 8
+      },
+      {
+        "stepId": "fnaf-sb",
+        "title": "Five Nights at Freddy's: Security Breach",
+        "ids": ["game_fnaf_securitybreach"],
+        "order": 9
+      },
+      {
+        "stepId": "fnaf-hw2",
+        "title": "Five Nights at Freddy's: Help Wanted 2",
+        "ids": ["game_fnaf_helpwanted2"],
+        "order": 10
+      },
+      {
+        "stepId": "fnaf-sotm",
+        "title": "Five Nights at Freddy's: Secret of the Mimic",
+        "ids": ["game_fnaf_secretofthemimic"],
+        "order": 11
+      }
+    ]
+  }
+]

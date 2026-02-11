@@ -15,7 +15,6 @@ import { useMasterGameLookup } from "./useMasterGameLookup";
 
 /**
  * Type Extension to handle masterStats until GameTypes.ts is fully re-synced.
- * This ensures the UI can show "0 / 51" for unowned games[cite: 1].
  */
 type AugmentedGameVersion = GameVersion & {
   masterStats?: {
@@ -40,7 +39,7 @@ export function useTrophyFilter(
   showShovelware: boolean,
   platforms: PlatformFilter
 ) {
-  // 1. INITIALIZE HELPERS (O(1) Fast Lookup) [cite: 2]
+  // 1. INITIALIZE HELPERS
   const { identifyGame } = useMasterGameLookup();
 
   // 2. CALCULATE DASHBOARD STATS
@@ -64,6 +63,7 @@ export function useTrophyFilter(
 
     // Helper: Platform Filter Toggle logic
     const isPlatformEnabled = (plat: string) => {
+      if (!plat) return false;
       const p = plat.toUpperCase();
       if (p.includes("PS5") && platforms.PS5) return true;
       if (p.includes("PS4") && platforms.PS4) return true;
@@ -81,16 +81,25 @@ export function useTrophyFilter(
       const master = identifyGame(game.npCommunicationId);
       const key = master?.canonicalId || game.npCommunicationId;
 
-      // Inject Master Stats for display fallback [cite: 1]
+      // Inject Master Stats
       if (master?.stats) {
         processed.masterStats = master.stats;
       }
 
       if (!groupedMap.has(key)) {
-        const manualArt = master?.art;
+        const mArt = master?.art;
+
+        // 🟢 ARTWORK FIX (OWNED):
+        // 1. storesquare (If you manually enriched the JSON)
+        // 2. game.trophyTitleIconUrl (The LIVE Backend Enriched Art) 👈 MOVED UP
+        // 3. icon (The Standard Lite JSON Icon)
         const icon =
-          manualArt?.storesquare || game.trophyTitleIconUrl || manualArt?.square;
-        const art = manualArt?.hero || game.gameArtUrl || manualArt?.master || icon;
+          mArt?.storesquare ||
+          game.trophyTitleIconUrl || // Prioritize Backend over Static JSON
+          mArt?.icon ||
+          mArt?.square;
+
+        const art = mArt?.hero || game.gameArtUrl || mArt?.master || icon;
 
         groupedMap.set(key, {
           id: key,
@@ -130,7 +139,6 @@ export function useTrophyFilter(
     });
 
     // --- C. PROCESS UNOWNED (Global/Discover Mode) ---
-    // This section now correctly uses the platforms dictionary[cite: 2].
     if (ownershipMode !== "OWNED") {
       masterGames.forEach((master) => {
         const key = master.canonicalId;
@@ -140,7 +148,9 @@ export function useTrophyFilter(
 
         if (!group) {
           const mArt = master.art;
-          const icon = mArt?.storesquare || mArt?.square || master.iconUrl;
+
+          // Unowned games rely on JSON data
+          const icon = mArt?.storesquare || mArt?.square || mArt?.icon || master.iconUrl;
           const art = mArt?.hero || mArt?.master || icon;
 
           group = {
@@ -154,17 +164,15 @@ export function useTrophyFilter(
           groupedMap.set(key, group);
         }
 
-        // Iterate through Platform Dictionary (PS5, PS4, etc.) [cite: 2]
-        Object.entries(master.platforms).forEach(([platformKey, variants]) => {
-          if (!isPlatformEnabled(platformKey)) return;
-
+        // Iterate values to check specific versions (Fixes Shovelware Bug)
+        Object.values(master.platforms).forEach((variants: any[]) => {
           variants.forEach((v: any) => {
-            // Skip if user already owns this specific version (by ID)
+            if (!isPlatformEnabled(v.platform)) return;
             if (group!.versions.some((gv) => gv.id === v.id)) return;
 
             group!.versions.push({
               id: v.id || "unknown",
-              platform: platformKey,
+              platform: v.platform || "Unknown",
               region: v.region,
               progress: 0,
               isOwned: false,
@@ -247,7 +255,7 @@ export function useTrophyFilter(
         return (progA - progB) * dir;
       }
 
-      // Default: Last Played [cite: 1]
+      // Default: Last Played
       const bestA = a.versions[0];
       const bestB = b.versions[0];
       const timeA = bestA?.lastPlayed ? new Date(bestA.lastPlayed).getTime() : 0;

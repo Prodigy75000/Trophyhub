@@ -1,3 +1,4 @@
+// src/hooks/useMasterGameLookup.ts
 import { useCallback, useMemo } from "react";
 import masterGamesRaw from "../../data/master_games.json";
 
@@ -10,13 +11,7 @@ export function useMasterGameLookup() {
       // Map Canonical ID
       if (game.canonicalId) map.set(game.canonicalId, game);
 
-      // Map Linked Versions (Legacy)
-      game.linkedVersions?.forEach((v: any) => {
-        if (v.npCommunicationId) map.set(v.npCommunicationId, game);
-        if (v.titleId) map.set(v.titleId, game);
-      });
-
-      // Map Platforms (New Format)
+      // Map Platforms (New Format: playstation, xbox, etc.)
       if (game.platforms) {
         Object.values(game.platforms).forEach((platformList: any) => {
           if (Array.isArray(platformList)) {

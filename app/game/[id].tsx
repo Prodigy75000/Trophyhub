@@ -57,17 +57,35 @@ export default function GameScreen() {
     justEarnedIds,
   } = useGameDetails(gameId, searchText, sortMode as any, sortDirection);
 
-  // 1. Identify instantly if the game has DLC from local JSON.tsx]
-  const hasDlc = useMemo(() => {
-    const entry = (masterGamesRaw as any[]).find(
+  // 🟢 1. CONSOLIDATED MASTER ENTRY LOOKUP (Efficient)
+  const masterEntry = useMemo(() => {
+    return (masterGamesRaw as any[]).find(
       (g) =>
         g.canonicalId === gameId ||
         Object.values(g.platforms || {}).some((l: any) =>
           l.some((v: any) => v.id === gameId)
         )
     );
-    return (entry?.trophyGroups?.length ?? 0) > 1;
   }, [gameId]);
+
+  // 🟢 2. ROBUST ICON RESOLUTION
+  // Priorities match useTrophyFilter: storesquare > Live API > square > icon
+  const resolvedIcon = useMemo(() => {
+    const mArt = masterEntry?.art;
+    return (
+      mArt?.icon || // Lite JSON
+      mArt?.storesquare ||
+      game?.trophyTitleIconUrl || // Live API (for owned games)
+      mArt?.square || // Legacy JSON (Prioritized)
+      masterEntry?.iconUrl || // Fallback
+      ""
+    );
+  }, [masterEntry, game]);
+
+  // 3. Identify instantly if the game has DLC from local JSON
+  const hasDlc = useMemo(() => {
+    return (masterEntry?.trophyGroups?.length ?? 0) > 1;
+  }, [masterEntry]);
 
   // --- LOGIC: REVEAL GATING ---
   const isDataStale = game && String(game.id) !== String(gameId);
@@ -77,11 +95,11 @@ export default function GameScreen() {
     !isDataStale &&
     game &&
     processedTrophies.length > 0 &&
-    (sortMode !== "DEFAULT" || !hasDlc || (hasDlc && groupedData !== null)); //.tsx]
+    (sortMode !== "DEFAULT" || !hasDlc || (hasDlc && groupedData !== null));
 
   const showListSkeletons = !isContentReady;
 
-  // Reveal Animation.tsx]
+  // Reveal Animation
   const listOpacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(listOpacity, {
@@ -93,19 +111,15 @@ export default function GameScreen() {
 
   // --- VERSIONS & SCROLLING ---
   const versions = useMemo(() => {
-    const entry = (masterGamesRaw as any[]).find(
-      (g) =>
-        g.canonicalId === gameId ||
-        Object.values(g.platforms || {}).some((l: any) =>
-          l.some((v: any) => v.id === gameId)
-        )
-    );
-    let list = entry?.platforms
-      ? Object.entries(entry.platforms).flatMap(([p, vs]: any) =>
+    // Reuse masterEntry for version lookup too
+    let list = masterEntry?.platforms
+      ? Object.entries(masterEntry.platforms).flatMap(([p, vs]: any) =>
           vs.map((v: any) => ({ id: v.id, platform: p, region: v.region }))
         )
       : [{ id: gameId, platform: game?.trophyTitlePlatform || "PSN" }];
+
     const unique = Array.from(new Map(list.map((v) => [v.id, v])).values());
+
     return contextModeStr !== "GLOBAL" && trophies?.trophyTitles
       ? unique.filter((v) =>
           trophies.trophyTitles.some(
@@ -113,7 +127,7 @@ export default function GameScreen() {
           )
         )
       : unique;
-  }, [gameId, game, trophies, contextModeStr]);
+  }, [gameId, game, trophies, contextModeStr, masterEntry]);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const totalHeaderHeight = HEADER_HEIGHT + insets.top;
@@ -184,7 +198,7 @@ export default function GameScreen() {
       >
         {game && (
           <GameHero
-            iconUrl={game.trophyTitleIconUrl ?? ""}
+            iconUrl={resolvedIcon} // 🟢 UPDATED: Passes the robust resolved icon
             title={game.trophyTitleName ?? "Unknown"}
             platform={game.trophyTitlePlatform}
             progress={game.progress}
@@ -197,10 +211,9 @@ export default function GameScreen() {
           />
         )}
 
-        {/* 🟢 SKELETONS WITH FIXED RESERVED SPACE.tsx] */}
+        {/* 🟢 SKELETONS */}
         {showListSkeletons && (
           <View style={styles.skeletonContainer}>
-            {/* Reserved space set to 0 horizontal margin to match your fix */}
             {hasDlc && sortMode === "DEFAULT" && (
               <View
                 style={{
@@ -218,7 +231,7 @@ export default function GameScreen() {
           </View>
         )}
 
-        {/* 🟢 LIST RENDER.tsx] */}
+        {/* 🟢 LIST RENDER */}
         {!showListSkeletons && (
           <Animated.View style={{ opacity: listOpacity }}>
             {shouldShowGroups

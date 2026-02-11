@@ -27,7 +27,7 @@ app.use((req, res, next) => {
   const logKey = `${req.method} ${req.originalUrl}`;
 
   if (!recentLogs.has(logKey)) {
-    console.log(`🔔 SERVER HIT: ${logKey}`);
+    //console.log(`🔔 SERVER HIT: ${logKey}`);
     recentLogs.add(logKey);
 
     // Clear the key after 2 seconds to allow future valid hits

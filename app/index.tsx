@@ -37,7 +37,6 @@ import ProfileDashboard from "../src/components/trophies/ProfileDashboard";
 // Styles
 import { styles } from "../src/styles/index.styles";
 
-// 🟢 FIX 1: Exact height of the single-row HeaderActionBar (12px pad + 40px btn + 12px pad)
 const BASE_HEADER_HEIGHT = 64;
 const STORAGE_KEY_GRID = "USER_GRID_COLUMNS";
 
@@ -87,21 +86,12 @@ export default function HomeScreen() {
     PSVITA: true,
   });
 
-  // --- 2. DATA STRATEGY ---
+  // --- 2. DATA STRATEGY (CLEANED) ---
+  // 🟢 FIX 1: Removed the old "require" logic. masterGamesRaw now has EVERYTHING.
+  // We just pass it through. The filtering happens in useTrophyFilter.
   const masterDatabase = useMemo(() => {
-    const highQualityGames = masterGamesRaw as unknown as any[];
-    if (showShovelware) {
-      try {
-        console.log("⚠️ Loading Shovelware Database...");
-        const shovelwareGames = require("../data/master_shovelware.json");
-        return [...highQualityGames, ...shovelwareGames];
-      } catch (e) {
-        console.warn("Could not load shovelware database", e);
-        return highQualityGames;
-      }
-    }
-    return highQualityGames;
-  }, [showShovelware]);
+    return masterGamesRaw as unknown as any[];
+  }, []);
 
   // --- 3. LOGIC HOOKS ---
   const { userStats, sortedList } = useTrophyFilter(
@@ -114,7 +104,7 @@ export default function HomeScreen() {
     sortMode,
     sortDirection,
     pinnedIds,
-    showShovelware,
+    showShovelware, // This hook handles the filtering now
     platforms
   );
 
@@ -228,6 +218,10 @@ export default function HomeScreen() {
     ({ item }: { item: any }) => {
       const isPinned = item.versions.some((v: any) => pinnedIds.has(v.id));
 
+      // 🟢 FIX 2: Safely resolve the icon URL
+      // Priority: item.art.icon (New JSON) -> item.icon (API/Old) -> Fallback
+      const safeIcon = item.art?.icon || item.icon || item.trophyTitleIconUrl;
+
       if (viewMode === "GRID") {
         return (
           <GameGridItem
@@ -238,7 +232,7 @@ export default function HomeScreen() {
             onPin={() => togglePin(item.id)}
             isPeeking={activePeekId === item.id}
             title={item.title}
-            icon={item.icon}
+            icon={safeIcon} // 👈 Updated
             heroArt={item.art}
             onTogglePeek={() =>
               setActivePeekId((prev) => (prev === item.id ? null : item.id))
@@ -251,7 +245,7 @@ export default function HomeScreen() {
       return (
         <GameCard
           title={item.title}
-          icon={item.icon}
+          icon={safeIcon} // 👈 Updated
           art={item.art}
           versions={item.versions}
           isPinned={isPinned}
@@ -271,7 +265,6 @@ export default function HomeScreen() {
           styles.headerContainer,
           {
             paddingTop: insets.top,
-            // 🟢 FIX 2: Removed "+ 60"
             height: totalHeaderHeight,
             transform: [{ translateY }],
           },
@@ -318,7 +311,6 @@ export default function HomeScreen() {
             onScroll={onScroll}
             contentContainerStyle={{
               ...styles.listContent,
-              // 🟢 FIX 3: Matches Header exactly (+8px breathing room)
               paddingTop: totalHeaderHeight + 8,
             }}
             ListHeaderComponent={

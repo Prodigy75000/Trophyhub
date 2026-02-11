@@ -55,7 +55,7 @@ async function safeFetchUrl(url, accessToken, fallbackKey) {
 
     if (isAuthError) throw err;
 
-    console.warn(`⚠️ [${fallbackKey}] Fetch Skipped (Likely 404): ${msg}`);
+    //console.warn(`⚠️ [${fallbackKey}] Fetch Skipped (Likely 404): ${msg}`);
     return { [fallbackKey]: [] };
   }
 }
@@ -63,6 +63,7 @@ async function safeFetchUrl(url, accessToken, fallbackKey) {
 // 🟢 1. GET GAME LIST
 const getGameList = async (req, res) => {
   try {
+    //console.log(req.accessToken);
     const { accountId } = req.params;
     const trophyUrl = `https://m.np.playstation.com/api/trophy/v1/users/${accountId}/trophyTitles`;
     const gameListUrl = `https://m.np.playstation.com/api/gamelist/v2/users/${accountId}/titles`;
@@ -110,14 +111,6 @@ const getGameList = async (req, res) => {
 const getGameDetails = async (req, res) => {
   const { accountId, npCommunicationId } = req.params;
   const { gameName, platform } = req.query;
-
-  // 🟢 DEDUPLICATED: Only log this specific ID once every 5 seconds
-  if (!recentDetailLogs.has(npCommunicationId)) {
-    console.log(`📡 Fetching Details for: ${npCommunicationId}`);
-    recentDetailLogs.add(npCommunicationId);
-    setTimeout(() => recentDetailLogs.delete(npCommunicationId), 5000);
-  }
-
   try {
     const baseUrl = `https://m.np.playstation.com/api/trophy/v1`;
     const progressUrl = `${baseUrl}/users/${accountId}/npCommunicationIds/${npCommunicationId}/trophyGroups/all/trophies?limit=1000`;
@@ -133,7 +126,19 @@ const getGameDetails = async (req, res) => {
     const progress = progressData.trophies || [];
     const definitions = defData.trophies || [];
     let finalTrophies = [];
+    // 🟢 FIX: The name is hiding in 'groupData' (The root object from Sony)
+    const fetchedName =
+      groupData?.trophyTitleName || // Best source (Root Metadata)
+      progress[0]?.trophyTitleName || // Backup (User Progress)
+      definitions[0]?.trophyTitleName || // Backup (Static Defs)
+      "Unknown Title";
 
+    // 🟢 LOGGING: Now it will actually print "Grand Theft Auto V"
+    if (!recentDetailLogs.has(npCommunicationId)) {
+      console.log(`📡 Fetching Details for: ${npCommunicationId} | "${fetchedName}"`);
+      recentDetailLogs.add(npCommunicationId);
+      setTimeout(() => recentDetailLogs.delete(npCommunicationId), 5000);
+    }
     const isRichProgress = progress.length > 0 && !!progress[0].trophyName;
 
     if (isRichProgress) {

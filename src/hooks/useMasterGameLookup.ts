@@ -1,21 +1,27 @@
 // src/hooks/useMasterGameLookup.ts
 import { useCallback, useMemo } from "react";
-import masterGamesRaw from "../../data/master_games.json";
+import { MasterGameEntry, MasterGameVariant } from "../types/GameTypes";
 
-export function useMasterGameLookup() {
+// 🟢 CHANGE: Accept 'games' as an argument instead of importing JSON
+export function useMasterGameLookup(games: MasterGameEntry[] = []) {
   // 1. Create a Fast Lookup Map (O(1) access)
   const masterLookup = useMemo(() => {
-    const map = new Map<string, any>();
+    const map = new Map<string, MasterGameEntry>();
 
-    (masterGamesRaw as any[]).forEach((game) => {
+    if (!games || games.length === 0) return map;
+
+    games.forEach((game) => {
       // Map Canonical ID
       if (game.canonicalId) map.set(game.canonicalId, game);
 
-      // Map Platforms (New Format: playstation, xbox, etc.)
+      // Map Platforms
       if (game.platforms) {
-        Object.values(game.platforms).forEach((platformList: any) => {
+        // 🟢 FIX: Explicit cast to handle Object.values inference
+        const platformLists = Object.values(game.platforms) as MasterGameVariant[][];
+
+        platformLists.forEach((platformList) => {
           if (Array.isArray(platformList)) {
-            platformList.forEach((p: any) => {
+            platformList.forEach((p) => {
               if (p.id) map.set(p.id, game);
             });
           }
@@ -23,7 +29,7 @@ export function useMasterGameLookup() {
       }
     });
     return map;
-  }, []);
+  }, [games]); // 🟢 Re-build map only when database changes
 
   // 2. The function your Home Screen expects
   const identifyGame = useCallback(
@@ -34,6 +40,7 @@ export function useMasterGameLookup() {
 
       // A. Try ID Match (Fastest)
       if (masterLookup.has(cleanId)) return masterLookup.get(cleanId);
+      // B. Try Base ID (if strictly needed)
       if (masterLookup.has(baseId)) return masterLookup.get(baseId);
 
       return undefined;

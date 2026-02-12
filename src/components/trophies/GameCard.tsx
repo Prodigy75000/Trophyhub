@@ -1,4 +1,4 @@
-// components/trophies/GameCard.tsx
+// src/components/trophies/GameCard.tsx
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
@@ -10,14 +10,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { GameVersion } from "../../types/GameTypes"; // 🟢 Import Global Type
+import { GameVersion } from "../../types/GameTypes";
 import { formatDate } from "../../utils/formatDate";
 import ProgressCircle from "../ProgressCircle";
 
 // Styles
 import { IMG_SIZE, styles } from "../../styles/GameCard.styles";
 
-// ... Assets ...
 const ICONS = {
   bronze: require("../../../assets/icons/trophies/bronze.png"),
   silver: require("../../../assets/icons/trophies/silver.png"),
@@ -44,10 +43,9 @@ type StatItemProps = {
 };
 
 // ---------------------------------------------------------------------------
-// SUB-COMPONENTS (Defined outside to prevent re-renders)
+// SUB-COMPONENTS
 // ---------------------------------------------------------------------------
 
-// 1. Stat Item
 const StatItemComponent = ({ icon, earned, total, disabled = false }: StatItemProps) => (
   <View style={[styles.statItemContainer, disabled && styles.statItemDisabled]}>
     <Image
@@ -61,8 +59,8 @@ const StatItemComponent = ({ icon, earned, total, disabled = false }: StatItemPr
   </View>
 );
 const StatItem = memo(StatItemComponent);
+StatItem.displayName = "StatItem";
 
-// 2. Xbox Stats
 const XboxStatsComponent = ({ activeVer }: { activeVer: UI_GameVersion }) => (
   <View style={styles.xboxContainer}>
     <View style={styles.xboxIconGroup}>
@@ -82,10 +80,9 @@ const XboxStatsComponent = ({ activeVer }: { activeVer: UI_GameVersion }) => (
   </View>
 );
 const XboxStats = memo(XboxStatsComponent);
+XboxStats.displayName = "XboxStats";
 
-// 3. PSN Stats
 const PsnStatsComponent = ({ activeVer }: { activeVer: UI_GameVersion }) => {
-  // 🟢 Fixed Type Safety: Only allow keys that exist in both objects
   const getCount = (key: "bronze" | "silver" | "gold" | "platinum") => {
     return activeVer.counts[key] || activeVer.masterStats?.[key] || 0;
   };
@@ -122,6 +119,7 @@ const PsnStatsComponent = ({ activeVer }: { activeVer: UI_GameVersion }) => {
   );
 };
 const PsnStats = memo(PsnStatsComponent);
+PsnStats.displayName = "PsnStats";
 
 // ---------------------------------------------------------------------------
 // MAIN COMPONENT
@@ -138,7 +136,7 @@ type GameCardProps = {
   sourceMode?: "OWNED" | "GLOBAL" | "UNOWNED";
 };
 
-const GameCard = ({
+const GameCardComponent = ({
   title,
   icon,
   art,
@@ -155,6 +153,7 @@ const GameCard = ({
   // Group versions by platform
   const groupedVersions = useMemo(() => {
     const groups: Record<string, UI_GameVersion[]> = {};
+    if (!versions) return {};
     versions.forEach((v) => {
       if (!groups[v.platform]) groups[v.platform] = [];
       groups[v.platform].push(v);
@@ -175,32 +174,12 @@ const GameCard = ({
 
   // Ensure active platform exists in list if props change
   useEffect(() => {
-    if (!uniquePlatforms.includes(activePlatform)) {
+    if (!uniquePlatforms.includes(activePlatform) && uniquePlatforms.length > 0) {
       setActivePlatform(uniquePlatforms[0]);
     }
   }, [uniquePlatforms, activePlatform]);
 
-  const currentStack = groupedVersions[activePlatform] || [];
-  const activeVer = currentStack[0] || versions[0];
-
-  const displayImage = icon;
-  const heroArt = art || icon;
-  const isSquareFormat = activeVer.platform === "PS5";
-  const imageResizeMode = isSquareFormat ? "cover" : "contain";
-
-  // Calculate total for "Started" check
-  const totalEarned = useMemo(() => {
-    if (!activeVer) return 0;
-    return (
-      (activeVer.counts.earned || 0) +
-      activeVer.counts.earnedBronze +
-      activeVer.counts.earnedSilver +
-      activeVer.counts.earnedGold +
-      activeVer.counts.earnedPlatinum
-    );
-  }, [activeVer]);
-
-  const hasStarted = totalEarned > 0;
+  // 🟢 FIX START: Move Hooks UP before the early return
 
   // Delay image load slightly for smoother list mounting
   useEffect(() => {
@@ -232,11 +211,39 @@ const GameCard = ({
     outputRange: ["rgba(0,0,0,0)", "rgba(255, 215, 0, 0.8)"],
   });
 
+  // 🟢 FIX END: Now we can safely check for data
+
+  const currentStack = groupedVersions[activePlatform] || [];
+  const activeVer = currentStack[0] || versions[0];
+
+  // The Early Return is now safe because all hooks have been declared
+  if (!activeVer) return null;
+
+  const displayImage = icon;
+  const heroArt = art || icon;
+  const isSquareFormat = activeVer.platform === "PS5";
+  const imageResizeMode = isSquareFormat ? "cover" : "contain";
+
+  // Calculate total for "Started" check
+  const totalEarned =
+    (activeVer.counts.earned || 0) +
+    activeVer.counts.earnedBronze +
+    activeVer.counts.earnedSilver +
+    activeVer.counts.earnedGold +
+    activeVer.counts.earnedPlatinum;
+
+  const hasStarted = totalEarned > 0 || activeVer.progress > 0;
+
   const handlePress = () => {
     router.push({
       pathname: "/game/[id]",
       params: { id: activeVer.id, artParam: heroArt, contextMode: sourceMode },
     });
+  };
+
+  const handlePlatformPress = (e: any, plat: string) => {
+    e.stopPropagation();
+    setActivePlatform(plat);
   };
 
   return (
@@ -264,7 +271,7 @@ const GameCard = ({
                       ? styles.versionActive
                       : styles.versionInactive,
                   ]}
-                  onPress={() => setActivePlatform(plat)}
+                  onPress={(e) => handlePlatformPress(e, plat)}
                 >
                   <Text
                     style={[
@@ -325,4 +332,7 @@ const GameCard = ({
   );
 };
 
-export default memo(GameCard);
+const GameCard = memo(GameCardComponent);
+GameCard.displayName = "GameCard";
+
+export default GameCard;

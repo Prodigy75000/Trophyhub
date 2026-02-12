@@ -3,7 +3,14 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, FlatList, Text, TouchableOpacity, View } from "react-native";
+import {
+  Animated,
+  Dimensions,
+  FlatList,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import {
   Gesture,
   GestureDetector,
@@ -27,6 +34,7 @@ import HeaderActionBar, {
   SortMode,
   ViewMode,
 } from "../src/components/HeaderActionBar";
+import GameGridSkeleton from "../src/components/skeletons/GameGridSkeleton"; // 🟢 IMPORT
 import GameCard from "../src/components/trophies/GameCard";
 import GameGridItem from "../src/components/trophies/GameGridItem";
 import ProfileDashboard from "../src/components/trophies/ProfileDashboard";
@@ -40,8 +48,18 @@ const STORAGE_KEY_GRID = "USER_GRID_COLUMNS";
 export default function HomeScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { trophies, accountId, accessToken, refreshAllTrophies, xboxTitles } =
-    useTrophy();
+  const { width: screenWidth } = Dimensions.get("window"); // 🟢 Get Screen Width
+
+  // 🟢 CONSUME CONTEXT (Including Loading State)
+  const {
+    trophies,
+    accountId,
+    accessToken,
+    refreshAllTrophies,
+    xboxTitles,
+    masterDatabase,
+    isMasterLoading, // <--- 🟢 KEY: Used to "hold the curtain"
+  } = useTrophy();
 
   // --- 1. UI STATE ---
   const [searchText, setSearchText] = useState("");
@@ -83,33 +101,6 @@ export default function HomeScreen() {
     PSVITA: true,
   });
 
-  // --- 2. DATA STRATEGY (CLEANED) ---
-  const [masterDatabase, setMasterDatabase] = useState<any[]>([]);
-  const [isMasterLoading, setIsMasterLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadMaster = async () => {
-      try {
-        // Your server is http://localhost:4000/games right now.
-        const res = await fetch(`${PROXY_BASE_URL}/games`);
-        const data = await res.json();
-        if (!cancelled) setMasterDatabase(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.warn("Master DB fetch failed", e);
-        if (!cancelled) setMasterDatabase([]);
-      } finally {
-        if (!cancelled) setIsMasterLoading(false);
-      }
-    };
-
-    loadMaster();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // --- 3. LOGIC HOOKS ---
   const { userStats, sortedList } = useTrophyFilter(
     trophies,
@@ -121,7 +112,7 @@ export default function HomeScreen() {
     sortMode,
     sortDirection,
     pinnedIds,
-    showShovelware, // This hook handles the filtering now
+    showShovelware,
     platforms
   );
 
@@ -142,8 +133,6 @@ export default function HomeScreen() {
   // Fetch Profile & Summary
   useEffect(() => {
     if (!accountId || !accessToken) return;
-
-    refreshAllTrophies();
 
     const fetchProfile = async () => {
       try {
@@ -230,13 +219,10 @@ export default function HomeScreen() {
     listener: (e: any) => setShowScrollTop(e.nativeEvent.contentOffset.y > 300),
   });
 
-  // --- 6. RENDER ---
+  // --- 6. RENDER ITEM ---
   const renderItem = useCallback(
     ({ item }: { item: any }) => {
       const isPinned = item.versions.some((v: any) => pinnedIds.has(v.id));
-
-      // 🟢 FIX 2: Safely resolve the icon URL
-      // Priority: item.art.icon (New JSON) -> item.icon (API/Old) -> Fallback
       const safeIcon = item.art?.icon || item.icon || item.trophyTitleIconUrl;
 
       if (viewMode === "GRID") {
@@ -249,7 +235,7 @@ export default function HomeScreen() {
             onPin={() => togglePin(item.id)}
             isPeeking={activePeekId === item.id}
             title={item.title}
-            icon={safeIcon} // 👈 Updated
+            icon={safeIcon}
             heroArt={item.art}
             onTogglePeek={() =>
               setActivePeekId((prev) => (prev === item.id ? null : item.id))
@@ -262,7 +248,7 @@ export default function HomeScreen() {
       return (
         <GameCard
           title={item.title}
-          icon={safeIcon} // 👈 Updated
+          icon={safeIcon}
           art={item.art}
           versions={item.versions}
           isPinned={isPinned}
@@ -273,6 +259,8 @@ export default function HomeScreen() {
     },
     [viewMode, gridColumns, pinnedIds, activePeekId, ownershipMode, togglePin]
   );
+  // 🟢 NEW: Calculate Skeleton Size
+  const skeletonSize = screenWidth / gridColumns;
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -294,7 +282,7 @@ export default function HomeScreen() {
           onSortChange={setSortMode}
           sortDirection={sortDirection}
           onSortDirectionChange={() =>
-            setSortDirection((prev) => (prev === "ASC" ? "DESC" : "ASC"))
+            setSortDirection((p) => (p === "ASC" ? "DESC" : "ASC"))
           }
           ownershipMode={ownershipMode}
           onOwnershipChange={setOwnershipMode}
@@ -309,8 +297,23 @@ export default function HomeScreen() {
         />
       </Animated.View>
 
-      {/* CONTENT */}
-      {trophies?.trophyTitles ? (
+      {/* CONTENT WITH SKELETON LOADING */}
+      {isMasterLoading ? (
+        // 🟢 SHOW SKELETON GRID
+        <View
+          style={{
+            paddingTop: totalHeaderHeight + 8,
+            flexDirection: "row",
+            flexWrap: "wrap",
+            justifyContent: "flex-start", // Ensures grid alignment
+          }}
+        >
+          {/* Generate enough skeletons to fill the screen */}
+          {Array.from({ length: gridColumns * 5 }).map((_, i) => (
+            <GameGridSkeleton key={i} size={skeletonSize} />
+          ))}
+        </View>
+      ) : sortedList ? (
         <GestureDetector gesture={pinchGesture}>
           <Animated.FlatList
             ref={flatListRef}
@@ -348,14 +351,13 @@ export default function HomeScreen() {
         <Text style={styles.errorText}>⚠️ No trophy data available.</Text>
       )}
 
-      {/* TOAST */}
+      {/* TOAST & FAB */}
       {toastMsg && (
         <View style={styles.toastContainer}>
           <Text style={styles.toastText}>{toastMsg}</Text>
         </View>
       )}
 
-      {/* FAB */}
       {showScrollTop && (
         <TouchableOpacity
           style={styles.fab}

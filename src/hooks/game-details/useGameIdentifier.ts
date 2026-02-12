@@ -1,16 +1,22 @@
 // src/hooks/game-details/useGameIdentifier.ts
 import { useMemo } from "react";
-import masterGamesRaw from "../../../data/master_games.json";
 import { useTrophy } from "../../../providers/TrophyContext";
-import { UnifiedGame } from "../../types/GameTypes";
+import { MasterGameEntry, UnifiedGame } from "../../types/GameTypes";
+import { useMasterGameLookup } from "../useMasterGameLookup"; // 🟢 Import the lookup hook
 
 /**
  * Resolves the master record and creates a unified game object.
- * Accepts trophies as an optional second argument to force reactivity
- * when the global context updates.
+ * 🟢 Now accepts masterGames to use the live DB instead of a static file.
  */
-export function useGameIdentifier(id: string, trophiesArg?: any) {
+export function useGameIdentifier(
+  id: string,
+  masterGames: MasterGameEntry[], // 🟢 Required: Live DB data
+  trophiesArg?: any
+) {
   const { trophies: contextTrophies, xboxTitles } = useTrophy();
+
+  // 🟢 Use our optimized lookup hook (O(1) speed)
+  const { identifyGame } = useMasterGameLookup(masterGames);
 
   // Prioritize passed argument for immediate reactivity
   const trophies = trophiesArg || contextTrophies;
@@ -18,31 +24,13 @@ export function useGameIdentifier(id: string, trophiesArg?: any) {
   return useMemo(() => {
     if (!id) return { gameObject: null, masterRecord: null };
 
-    // 🟢 1. ID SANITIZATION
     const cleanId = String(id).trim();
     const baseId = cleanId.split("_")[0];
 
-    // 🟢 2. MASTER RECORD LOOKUP
-    const master = (masterGamesRaw as any[]).find((m) => {
-      // Direct Canonical Match
-      if (String(m.canonicalId) === cleanId || String(m.canonicalId) === baseId)
-        return true;
+    // 🟢 REPLACED: The heavy .find() loop is gone. We use the O(1) lookup now.
+    const master = identifyGame(cleanId);
 
-      // Platforms dictionary check (New Structure)
-      if (m.platforms) {
-        return Object.values(m.platforms).some(
-          (platformList: any) =>
-            Array.isArray(platformList) &&
-            platformList.some(
-              (p: any) => String(p.id) === cleanId || String(p.id) === baseId
-            )
-        );
-      }
-      return false;
-    });
-
-    // 🟢 3. CHECK USER OWNERSHIP (PSN)
-    // This block is now reactive to the 'trophies' object to update the Hero bar [cite: 8]
+    // 泙 3. CHECK USER OWNERSHIP (PSN)
     const psnGame = trophies?.trophyTitles?.find(
       (t: any) =>
         String(t.npCommunicationId) === cleanId || String(t.npCommunicationId) === baseId
@@ -66,7 +54,7 @@ export function useGameIdentifier(id: string, trophiesArg?: any) {
       };
     }
 
-    // 🟢 4. CHECK USER OWNERSHIP (XBOX)
+    // 泙 4. CHECK USER OWNERSHIP (XBOX)
     const xboxGame = xboxTitles?.find((t: any) => String(t.titleId) === cleanId);
     if (xboxGame) {
       return {
@@ -86,9 +74,10 @@ export function useGameIdentifier(id: string, trophiesArg?: any) {
       };
     }
 
-    // 🟢 5. FALLBACK (Global/Master Only)
+    // 泙 5. FALLBACK (Global/Master Only)
     if (master) {
-      const mappedTrophies = (master.trophies || []).map((t: any) => ({
+      // 🟢 FIX: Handle cases where trophies might be missing in DB or named differently
+      const mappedTrophies = (master["trophies"] || []).map((t: any) => ({
         trophyId: t.id,
         trophyName: t.name,
         trophyDetail: t.detail,
@@ -116,5 +105,5 @@ export function useGameIdentifier(id: string, trophiesArg?: any) {
     }
 
     return { gameObject: null, masterRecord: null };
-  }, [id, trophies, xboxTitles]); // 🟢 Listens to trophies for automatic Hero updates [cite: 9]
+  }, [id, trophies, xboxTitles, identifyGame, masterGames]);
 }

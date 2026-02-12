@@ -1,9 +1,12 @@
-import React, { createContext, useContext, useEffect, useMemo } from "react";
+// providers/TrophyContext.tsx
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { PROXY_BASE_URL } from "../config/endpoints"; // 🟢 Import Config
 import { usePsnSession } from "../src/hooks/context/usePsnSession";
 import { useTrophyData } from "../src/hooks/context/useTrophyData";
 import { useXboxLogic } from "../src/hooks/context/useXboxLogic";
-import { useTrophyWatchdog } from "../src/hooks/useTrophyWatchdog"; // 🟢 Used here now
+import { useTrophyWatchdog } from "../src/hooks/useTrophyWatchdog";
 import { TrophyContextType } from "../src/types/ContextTypes";
+import { MasterGameEntry } from "../src/types/GameTypes"; // 🟢 Import Type
 import { calculateTotalTrophies } from "../src/utils/trophyCalculations";
 
 const TrophyContext = createContext<TrophyContextType | null>(null);
@@ -13,8 +16,27 @@ export const TrophyProvider = ({ children }: { children: React.ReactNode }) => {
   const xbox = useXboxLogic();
   const data = useTrophyData(psn.accessToken, psn.accountId);
 
-  // 🟢 WATCHDOG INTEGRATION (Moved from Data Hook to Context)
-  // This prevents circular dependencies and keeps the data hook pure.
+  // 🟢 STATE: Hold the Master DB globally
+  const [masterDatabase, setMasterDatabase] = useState<MasterGameEntry[]>([]);
+  const [isMasterLoading, setIsMasterLoading] = useState(true);
+
+  // 🟢 EFFECT: Fetch Master DB once on mount
+  useEffect(() => {
+    const loadMaster = async () => {
+      try {
+        const res = await fetch(`${PROXY_BASE_URL}/api/games`);
+        const dbData = await res.json();
+        setMasterDatabase(Array.isArray(dbData) ? dbData : []);
+      } catch (e) {
+        console.warn("⚠️ Master DB fetch failed in Context:", e);
+      } finally {
+        // 🟢 DONE: Whether it worked or failed, stop loading
+        setIsMasterLoading(false);
+      }
+    };
+    loadMaster();
+  }, []);
+
   const watchdog = useTrophyWatchdog({
     accessToken: psn.accessToken,
     accountId: psn.accountId,
@@ -22,7 +44,6 @@ export const TrophyProvider = ({ children }: { children: React.ReactNode }) => {
     onNewTrophyDetected: data.refreshAllTrophies,
   });
 
-  // Update Watchdog Baseline when trophies change
   useEffect(() => {
     if (data.trophies?.trophyTitles) {
       const total = calculateTotalTrophies(data.trophies.trophyTitles);
@@ -42,10 +63,12 @@ export const TrophyProvider = ({ children }: { children: React.ReactNode }) => {
     () => ({
       ...psn,
       ...xbox,
-      ...data, // This includes lastUpdated & isLoadingCache
+      ...data,
       logout: handleLogout,
+      isMasterLoading,
+      masterDatabase, // 🟢 EXPOSE IT HERE
     }),
-    [psn, xbox, data]
+    [psn, xbox, data, masterDatabase]
   );
 
   return <TrophyContext.Provider value={value}>{children}</TrophyContext.Provider>;

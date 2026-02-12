@@ -9,6 +9,19 @@ import { XboxTitle } from "../types/XboxTypes";
 // --- Types ---
 type IdentifyGameFn = (id: string, name?: string) => any;
 
+// --- Helper Constants ---
+// 🟢 CLEANUP: Explicitly define that Xbox/Unknown platforms have NO trophies
+const ZERO_TROPHIES = {
+  bronze: 0,
+  silver: 0,
+  gold: 0,
+  platinum: 0,
+  earnedBronze: 0,
+  earnedSilver: 0,
+  earnedGold: 0,
+  earnedPlatinum: 0,
+};
+
 // --- Helper Functions ---
 
 const normalizePlatform = (raw: string) => {
@@ -36,19 +49,11 @@ const getPsnCounts = (game: any): GameCounts => ({
   earnedPlatinum: game.earnedTrophies?.platinum || 0,
 });
 
+// 🟢 FIX: Clean semantic mapping for Xbox
 const getXboxCounts = (game: XboxTitle): GameCounts => ({
-  // Fallback to 0 if properties are missing in the type definition
-  total: game.achievement?.totalAchievements || game.achievement?.totalGamerscore || 0,
-  earned:
-    game.achievement?.currentAchievements || game.achievement?.currentGamerscore || 0,
-  bronze: 0,
-  silver: 0,
-  gold: 0,
-  platinum: 0,
-  earnedBronze: 0,
-  earnedSilver: 0,
-  earnedGold: 0,
-  earnedPlatinum: 0,
+  ...ZERO_TROPHIES, // Spread the zeros because Xbox has no trophies
+  total: game.achievement?.totalGamerscore || 0, // Map Total -> Gamerscore
+  earned: game.achievement?.currentGamerscore || 0, // Map Earned -> Gamerscore
 });
 
 // --- Exported Processors ---
@@ -70,14 +75,11 @@ export const processXboxGame = (
 ): GameVersion | null => {
   if (!game) return null;
 
-  // Optional: Master Data Lookup (if you need it for art/icons)
-  // const master = identifyGame ? identifyGame(game.titleId, game.name) : null;
-
   return {
     id: game.titleId,
     platform: "XBOX",
     progress: game.achievement.progressPercentage,
-    // 🟢 FIX: Reverted 'titleHistory' to 'lastUnlock' (which matches your existing type)
+    // Ensure lastUnlock is always a string to prevent date errors
     lastPlayed: game.lastUnlock || new Date().toISOString(),
     counts: getXboxCounts(game),
     isOwned: true,

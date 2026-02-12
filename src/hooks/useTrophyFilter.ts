@@ -7,15 +7,12 @@ import type {
   SortDirection,
   SortMode,
 } from "../components/HeaderActionBar";
-import { GameVersion, MasterGameEntry } from "../types/GameTypes";
+import { GameVersion, MasterGameEntry, MasterGameVariant } from "../types/GameTypes";
 import { XboxTitle } from "../types/XboxTypes";
 import { processPsnGame, processXboxGame } from "../utils/gameProcessor";
 import { calculateUserStats } from "../utils/trophyCalculations";
 import { useMasterGameLookup } from "./useMasterGameLookup";
 
-/**
- * Type Extension to handle masterStats until GameTypes.ts is fully re-synced.
- */
 type AugmentedGameVersion = GameVersion & {
   masterStats?: {
     bronze: number;
@@ -39,8 +36,8 @@ export function useTrophyFilter(
   showShovelware: boolean,
   platforms: PlatformFilter
 ) {
-  // 1. INITIALIZE HELPERS
-  const { identifyGame } = useMasterGameLookup();
+  // 🟢 PASS THE DATA DOWN:
+  const { identifyGame } = useMasterGameLookup(masterGames);
 
   // 2. CALCULATE DASHBOARD STATS
   const userStats = useMemo(() => {
@@ -61,7 +58,6 @@ export function useTrophyFilter(
       }
     >();
 
-    // Helper: Platform Filter Toggle logic
     const isPlatformEnabled = (plat: string) => {
       if (!plat) return false;
       const p = plat.toUpperCase();
@@ -81,24 +77,29 @@ export function useTrophyFilter(
       const master = identifyGame(game.npCommunicationId);
       const key = master?.canonicalId || game.npCommunicationId;
 
-      // Inject Master Stats
-      if (master?.stats) {
-        processed.masterStats = master.stats;
+      let targetStats = master?.stats;
+
+      if (!targetStats && master?.platforms) {
+        // 🟢 FIX 1: Explicit cast to handle 'unknown' inference from Object.values
+        const allVariants = (
+          Object.values(master.platforms) as MasterGameVariant[][]
+        ).flat();
+
+        const match = allVariants.find((v) => v.id === game.npCommunicationId);
+
+        if (match?.stats) {
+          targetStats = match.stats;
+        }
+      }
+
+      if (targetStats) {
+        processed.masterStats = targetStats;
       }
 
       if (!groupedMap.has(key)) {
         const mArt = master?.art;
-
-        // 🟢 ARTWORK FIX (OWNED):
-        // 1. storesquare (If you manually enriched the JSON)
-        // 2. game.trophyTitleIconUrl (The LIVE Backend Enriched Art) 👈 MOVED UP
-        // 3. icon (The Standard Lite JSON Icon)
         const icon =
-          mArt?.storesquare ||
-          game.trophyTitleIconUrl || // Prioritize Backend over Static JSON
-          mArt?.icon ||
-          mArt?.square;
-
+          mArt?.storesquare || game.trophyTitleIconUrl || mArt?.icon || mArt?.square;
         const art = mArt?.hero || game.gameArtUrl || mArt?.master || icon;
 
         groupedMap.set(key, {
@@ -148,8 +149,6 @@ export function useTrophyFilter(
 
         if (!group) {
           const mArt = master.art;
-
-          // Unowned games rely on JSON data
           const icon = mArt?.storesquare || mArt?.square || mArt?.icon || master.iconUrl;
           const art = mArt?.hero || mArt?.master || icon;
 
@@ -164,11 +163,15 @@ export function useTrophyFilter(
           groupedMap.set(key, group);
         }
 
-        // Iterate values to check specific versions (Fixes Shovelware Bug)
-        Object.values(master.platforms).forEach((variants: any[]) => {
-          variants.forEach((v: any) => {
-            if (!isPlatformEnabled(v.platform)) return;
+        // 🟢 FIX 2: Explicit cast for the loop to avoid the next error
+        const platformsList = Object.values(master.platforms) as MasterGameVariant[][];
+
+        platformsList.forEach((variants) => {
+          variants.forEach((v) => {
+            if (!isPlatformEnabled(v.platform || "Unknown")) return;
             if (group!.versions.some((gv) => gv.id === v.id)) return;
+
+            const variantStats = v.stats || master.stats;
 
             group!.versions.push({
               id: v.id || "unknown",
@@ -176,7 +179,7 @@ export function useTrophyFilter(
               region: v.region,
               progress: 0,
               isOwned: false,
-              masterStats: master.stats,
+              masterStats: variantStats,
               lastPlayed: "",
               counts: {
                 total: 0,

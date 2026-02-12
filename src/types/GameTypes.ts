@@ -5,6 +5,15 @@ import { XboxTitle } from "./XboxTypes";
 export interface MasterGameVariant {
   id: string;
   region?: string | null;
+  platform?: string; // Added to match your DB data
+  // 🟢 FIX: Define stats here so TS knows they exist on the variant!
+  stats?: {
+    bronze: number;
+    silver: number;
+    gold: number;
+    platinum: number;
+    total: number;
+  };
 }
 
 // --- Master DB Types ---
@@ -24,11 +33,13 @@ export interface MasterGameEntry {
     platinum: number;
     total: number;
   };
-  // 🟢 UPDATED: Dictionary structure instead of an array
+  // Dictionary structure
   platforms?: {
     [platformName: string]: MasterGameVariant[];
   };
   tags?: string[];
+  trophies?: any[];
+  trophyGroups?: TrophyGroup[];
 }
 
 // --- Trophy Data Types ---
@@ -47,9 +58,8 @@ export interface GameTrophy {
 
 export interface TrophyGroup {
   trophyGroupId: string;
-  // 🟢 UPDATED: Fields for DLC Name mapping
-  trophyGroupName?: string; // Modern API
-  groupName?: string; // Master/Legacy fallback
+  trophyGroupName?: string;
+  groupName?: string;
   trophyGroupIconUrl: string;
   trophyIds: number[];
 }
@@ -75,7 +85,6 @@ export interface GameVersion {
   progress: number;
   lastPlayed?: string | null;
   counts: GameCounts;
-  // 🟢 ADDED: Required for GameCard/Grid fallbacks
   masterStats?: {
     bronze: number;
     silver: number;

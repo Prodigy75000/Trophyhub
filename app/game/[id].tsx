@@ -4,9 +4,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-//endpoint
-import { PROXY_BASE_URL } from "../../config/endpoints";
-
 // Context & Providers
 import { useTrophy } from "../../providers/TrophyContext";
 
@@ -27,8 +24,6 @@ import { normalizeTrophyType } from "../../src/utils/normalizeTrophy";
 // Styles
 import { styles } from "../../src/styles/GameScreen.styles";
 
-// Data
-
 const HEADER_HEIGHT = 60;
 const ZERO_COUNTS = { bronze: 0, silver: 0, gold: 0, platinum: 0 };
 
@@ -39,7 +34,9 @@ export default function GameScreen() {
 
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { trophies } = useTrophy();
+
+  // 🟢 FIX 1: Consume masterDatabase from Context (No local fetch!)
+  const { trophies, masterDatabase } = useTrophy();
 
   // --- UI STATE ---
   const [searchText, setSearchText] = useState("");
@@ -47,31 +44,6 @@ export default function GameScreen() {
   const [sortDirection, setSortDirection] = useState<"ASC" | "DESC">("ASC");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [selectedTrophy, setSelectedTrophy] = useState<any>(null);
-
-  const [masterDatabase, setMasterDatabase] = useState<any[]>([]);
-  const [isMasterLoading, setIsMasterLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadMaster = async () => {
-      try {
-        const res = await fetch(`${PROXY_BASE_URL}/games`);
-        const data = await res.json();
-        if (!cancelled) setMasterDatabase(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.warn("Master DB fetch failed", e);
-        if (!cancelled) setMasterDatabase([]);
-      } finally {
-        if (!cancelled) setIsMasterLoading(false);
-      }
-    };
-
-    loadMaster();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // --- DATA HOOK ---
   const {
@@ -84,35 +56,42 @@ export default function GameScreen() {
     justEarnedIds,
   } = useGameDetails(gameId, searchText, sortMode as any, sortDirection);
 
-  // 🟢 1. CONSOLIDATED MASTER ENTRY LOOKUP (Efficient)
+  // 泙 1. MASTER ENTRY LOOKUP (Uses Context DB)
   const masterEntry = useMemo(() => {
+    if (!masterDatabase || masterDatabase.length === 0) return null;
+
     return masterDatabase.find(
       (g) =>
         g.canonicalId === gameId ||
-        Object.values(g.platforms || {}).some((l: any) =>
-          l.some((v: any) => v.id === gameId)
-        )
+        // Check platform variants
+        (g.platforms &&
+          Object.values(g.platforms).some(
+            (list: any) => Array.isArray(list) && list.some((v: any) => v.id === gameId)
+          ))
     );
   }, [gameId, masterDatabase]);
 
-  // 🟢 2. ROBUST ICON RESOLUTION
-  // Priorities match useTrophyFilter: storesquare > Live API > square > icon
+  // 泙 2. ROBUST ICON RESOLUTION
   const resolvedIcon = useMemo(() => {
     const mArt = masterEntry?.art;
     return (
-      mArt?.icon || // Lite JSON
+      mArt?.icon ||
       mArt?.storesquare ||
-      game?.trophyTitleIconUrl || // Live API (for owned games)
-      mArt?.square || // Legacy JSON (Prioritized)
-      masterEntry?.iconUrl || // Fallback
+      game?.trophyTitleIconUrl ||
+      mArt?.square ||
+      masterEntry?.iconUrl ||
       ""
     );
   }, [masterEntry, game]);
 
-  // 3. Identify instantly if the game has DLC from local JSON
+  // 3. Identify instantly if the game has DLC
   const hasDlc = useMemo(() => {
-    return (masterEntry?.trophyGroups?.length ?? 0) > 1;
-  }, [masterEntry]);
+    // Check if we have multiple groups defined in processed data
+    return (
+      (groupedData && groupedData.length > 1) ||
+      (masterEntry?.trophyGroups?.length ?? 0) > 1
+    );
+  }, [masterEntry, groupedData]);
 
   // --- LOGIC: REVEAL GATING ---
   const isDataStale = game && String(game.id) !== String(gameId);
@@ -136,17 +115,31 @@ export default function GameScreen() {
     }).start();
   }, [isContentReady]);
 
-  // --- VERSIONS & SCROLLING ---
+  // --- 🟢 FIX 2: VERSIONS & SCROLLING ---
   const versions = useMemo(() => {
-    // Reuse masterEntry for version lookup too
-    let list = masterEntry?.platforms
-      ? Object.entries(masterEntry.platforms).flatMap(([p, vs]: any) =>
-          vs.map((v: any) => ({ id: v.id, platform: p, region: v.region }))
-        )
-      : [{ id: gameId, platform: game?.trophyTitlePlatform || "PSN" }];
+    let list: any[] = [];
 
+    if (masterEntry?.platforms) {
+      // Flatten the dictionary values
+      list = Object.values(masterEntry.platforms).flatMap((variantList: any) =>
+        Array.isArray(variantList)
+          ? variantList.map((v: any) => ({
+              id: v.id,
+              // 🟢 KEY FIX: Use the specific platform from the variant, not the dictionary key
+              platform: v.platform || "Unknown",
+              region: v.region,
+            }))
+          : []
+      );
+    } else {
+      // Fallback if no master data
+      list = [{ id: gameId, platform: game?.trophyTitlePlatform || "PSN" }];
+    }
+
+    // Deduplicate by ID
     const unique = Array.from(new Map(list.map((v) => [v.id, v])).values());
 
+    // If context is NOT global, filter to only show versions the user has played
     return contextModeStr !== "GLOBAL" && trophies?.trophyTitles
       ? unique.filter((v) =>
           trophies.trophyTitles.some(
@@ -225,7 +218,7 @@ export default function GameScreen() {
       >
         {game && (
           <GameHero
-            iconUrl={resolvedIcon} // 🟢 UPDATED: Passes the robust resolved icon
+            iconUrl={resolvedIcon}
             title={game.trophyTitleName ?? "Unknown"}
             platform={game.trophyTitlePlatform}
             progress={game.progress}
@@ -238,7 +231,7 @@ export default function GameScreen() {
           />
         )}
 
-        {/* 🟢 SKELETONS */}
+        {/* 泙 SKELETONS */}
         {showListSkeletons && (
           <View style={styles.skeletonContainer}>
             {hasDlc && sortMode === "DEFAULT" && (
@@ -258,7 +251,7 @@ export default function GameScreen() {
           </View>
         )}
 
-        {/* 🟢 LIST RENDER */}
+        {/* 泙 LIST RENDER */}
         {!showListSkeletons && (
           <Animated.View style={{ opacity: listOpacity }}>
             {shouldShowGroups

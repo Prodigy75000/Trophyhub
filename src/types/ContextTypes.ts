@@ -1,3 +1,5 @@
+// src/types/ContextTypes.ts
+import { MasterGameEntry } from "./GameTypes"; // 🟢 ADD THIS IMPORT
 import { XboxProfile, XboxTitle } from "./XboxTypes";
 
 export type UserProfile = {
@@ -47,4 +49,8 @@ export type TrophyContextType = {
     hash: string;
   }) => Promise<void>;
   logoutXbox: () => Promise<void>;
+
+  // 🟢 NEW: Add Master Database to the Context Type
+  isMasterLoading: boolean;
+  masterDatabase: MasterGameEntry[];
 };

@@ -13,11 +13,15 @@ export function useGameDetails(
   sortMode: "DEFAULT" | "RARITY" | "DATE_EARNED" = "DEFAULT",
   sortDirection: "ASC" | "DESC" = "ASC"
 ) {
-  const { trophies } = useTrophy();
+  const { trophies, masterDatabase } = useTrophy();
 
   // 1. IDENTIFY GAME
   // 🟢 No longer errors because we updated the function signature above
-  const { gameObject, masterRecord } = useGameIdentifier(id, trophies);
+  const { gameObject, masterRecord } = useGameIdentifier(
+    id,
+    masterDatabase || [],
+    trophies
+  );
 
   // 2. FETCH DATA
   const {

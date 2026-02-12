@@ -19,7 +19,6 @@ type AugmentedGameVersion = GameVersion & {
     silver: number;
     gold: number;
     platinum: number;
-    total: number;
   };
 };
 
@@ -172,14 +171,21 @@ export function useTrophyFilter(
             if (group!.versions.some((gv) => gv.id === v.id)) return;
 
             const variantStats = v.stats || master.stats;
-
+            const calculatedTotal = variantStats
+              ? (variantStats.bronze || 0) +
+                (variantStats.silver || 0) +
+                (variantStats.gold || 0) +
+                (variantStats.platinum || 0)
+              : 0;
             group!.versions.push({
               id: v.id || "unknown",
               platform: v.platform || "Unknown",
               region: v.region,
               progress: 0,
               isOwned: false,
-              masterStats: variantStats,
+              masterStats: variantStats
+                ? { ...variantStats, total: calculatedTotal }
+                : undefined,
               lastPlayed: "",
               counts: {
                 total: 0,

@@ -1,7 +1,7 @@
 // src/hooks/context/useXboxLogic.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
-import { PROXY_BASE_URL } from "../../../config/endpoints";
+import { clientFetch } from "../../api/client"; // 🟢 Use the smart client
 import { XboxProfile, XboxTitle } from "../../types/XboxTypes";
 
 const KEY_XBOX_XSTS = "xbox_xsts_token";
@@ -74,7 +74,7 @@ export function useXboxLogic() {
       try {
         console.log(`🟢 Fetching Xbox Games for ${targetXuid}...`);
         // Note: Ensure your backend route matches this exactly
-        const res = await fetch(`${PROXY_BASE_URL}/api/xbox/titles`, {
+        const res = await clientFetch("/api/xbox/titles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

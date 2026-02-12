@@ -3,7 +3,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
 import React, { useEffect } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity } from "react-native";
-import { PROXY_BASE_URL } from "../../config/endpoints";
+// 🟢 Use the smart client instead of raw fetch
+import { clientFetch } from "../api/client";
 
 type Props = {
   onSuccess: (data: any) => void;
@@ -11,11 +12,16 @@ type Props = {
 
 const CLIENT_ID = "5e278654-b281-411b-85f4-eb7fb056e5ba";
 
-// 🟢 CRITICAL: This generates "com.scee.psxandroid.scecompcall://auth"
+// 🟢 FIX: Use a clean 'auth' path for Xbox redirects
 const REDIRECT_URI = AuthSession.makeRedirectUri({
-  scheme: "com.scee.psxandroid.scecompcall",
   path: "auth",
 });
+
+const DISCOVERY = {
+  authorizationEndpoint:
+    "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize",
+  tokenEndpoint: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
+};
 
 export default function XboxLoginButton({ onSuccess }: Props) {
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
@@ -25,24 +31,19 @@ export default function XboxLoginButton({ onSuccess }: Props) {
       scopes: ["XboxLive.Signin", "offline_access"],
       responseType: AuthSession.ResponseType.Code,
       usePKCE: true,
-      extraParams: {
-        prompt: "select_account",
-      },
+      extraParams: { prompt: "select_account" },
     },
-    {
-      authorizationEndpoint:
-        "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize",
-      tokenEndpoint: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
-    }
+    DISCOVERY
   );
 
   useEffect(() => {
     if (response?.type === "success") {
       const { code } = response.params;
+
       const exchangeToken = async () => {
         try {
-          // Exchange code for tokens via your proxy
-          const res = await fetch(`${PROXY_BASE_URL}/xbox/exchange`, {
+          // 🟢 Use standardized /api/xbox route via smart client
+          const res = await clientFetch("/api/xbox/exchange", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -57,12 +58,13 @@ export default function XboxLoginButton({ onSuccess }: Props) {
 
           onSuccess(data);
         } catch (e: any) {
+          console.error("❌ Xbox Exchange Error:", e);
           Alert.alert("Xbox Login Failed", e.message);
         }
       };
       exchangeToken();
     }
-  }, [response]);
+  }, [response, request]);
 
   return (
     <TouchableOpacity
@@ -82,29 +84,17 @@ export default function XboxLoginButton({ onSuccess }: Props) {
   );
 }
 
-// 🟢 STYLES: Copied from SideMenu.styles.ts to ensure 1:1 visual match
 const styles = StyleSheet.create({
   xboxButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#107c10", // Official Xbox Green
+    backgroundColor: "#107c10",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
   },
-  xboxButtonText: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  buttonIcon: {
-    marginRight: 8,
-  },
+  xboxButtonText: { color: "white", fontSize: 14, fontWeight: "600" },
+  buttonIcon: { marginRight: 8 },
 });

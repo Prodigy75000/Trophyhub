@@ -1,6 +1,7 @@
 // src/hooks/context/useTrophyData.ts
 import { useCallback, useEffect, useState } from "react";
-import { PROXY_BASE_URL } from "../../../config/endpoints";
+// 🟢 1. Import the smart client
+import { clientFetch } from "../../api/client";
 import { TrophyData } from "../../types/ContextTypes";
 import { loadTrophyCache, saveTrophyCache } from "../../utils/trophyCache";
 
@@ -13,12 +14,10 @@ export function useTrophyData(accessToken: string | null, accountId: string | nu
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      // If we already have data, don't overwrite it
       if (trophies) return;
 
       setIsLoadingCache(true);
       try {
-        // 🟢 FIX: Cast the result to TrophyData so TypeScript is happy
         const rawCache = await loadTrophyCache();
         const cached = rawCache as TrophyData | null;
 
@@ -39,16 +38,16 @@ export function useTrophyData(accessToken: string | null, accountId: string | nu
     return () => {
       mounted = false;
     };
-  }, []); // Run once on mount
+  }, [trophies]);
 
   // 2. REFRESH ALL: Fetch fresh data and update cache
   const refreshAllTrophies = useCallback(async () => {
     if (!accessToken || !accountId) return;
     try {
       console.log("♻️ [TrophyContext] Fetching fresh data...");
-      const res = await fetch(`${PROXY_BASE_URL}/api/trophies/${accountId}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+
+      // 🟢 2. Use clientFetch: base URL and Headers are handled automatically
+      const res = await clientFetch(`/api/trophies/${accountId}`);
 
       if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
 
@@ -60,7 +59,7 @@ export function useTrophyData(accessToken: string | null, accountId: string | nu
       saveTrophyCache(data);
       console.log("✅ [TrophyContext] Data updated & cached");
     } catch (err) {
-      console.error("❌ [TrophyContext] Refresh failed (Using cached data)", err);
+      console.error("❌ [TrophyContext] Refresh failed", err);
     }
   }, [accessToken, accountId]);
 
@@ -69,9 +68,8 @@ export function useTrophyData(accessToken: string | null, accountId: string | nu
     async (npwr: string) => {
       if (!accessToken || !accountId) return;
       try {
-        const res = await fetch(`${PROXY_BASE_URL}/api/trophies/${accountId}/${npwr}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        // 🟢 3. Use clientFetch here as well
+        const res = await clientFetch(`/api/trophies/${accountId}/${npwr}`);
         const gameData = await res.json();
 
         setTrophies((prev) => {
@@ -82,7 +80,6 @@ export function useTrophyData(accessToken: string | null, accountId: string | nu
           const total = trophyList.length;
           const progress = total > 0 ? Math.floor((earned / total) * 100) : 0;
 
-          // 🟢 FIX: Explicitly type newData to avoid implicit 'any' errors
           const newData: TrophyData = {
             ...prev,
             trophyTitles: prev.trophyTitles.map((t) =>

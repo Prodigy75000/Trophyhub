@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Context & Providers
 import { useTrophy } from "../../providers/TrophyContext";
-
 // Components
 import TrophySkeleton from "../../src/components/skeletons/TrophySkeleton";
 import GameHero from "../../src/components/trophies/GameHero";

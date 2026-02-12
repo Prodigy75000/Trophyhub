@@ -2,15 +2,16 @@
 import * as AuthSession from "expo-auth-session";
 import { useCallback, useEffect, useRef } from "react";
 import { Alert } from "react-native";
-import { PROXY_BASE_URL } from "../../../config/endpoints";
-import { useTrophy } from "../../../providers/TrophyContext";
 
-import { makeRedirectUri } from "expo-auth-session";
+// 🟢 NEW: Use your smart client and standardized routes
+import { useTrophy } from "../../../providers/TrophyContext";
+import { clientFetch } from "../../api/client";
+
 const CLIENT_ID = "5e278654-b281-411b-85f4-eb7fb056e5ba";
 
-// 🟢 Helper to match the redirect URI exactly
+// 🟢 FIX: Use a clean path.
+// When running in Expo Go, this will look like exp://192.168.x.x:8081/--/auth
 const REDIRECT_URI = AuthSession.makeRedirectUri({
-  scheme: "com.scee.psxandroid.scecompcall",
   path: "auth",
 });
 
@@ -21,34 +22,27 @@ const DISCOVERY = {
 };
 
 export function useXboxAuth() {
-  const { setXboxProfile } = useTrophy();
+  // Consolidate context calls
+  const { setXboxProfile, handleXboxLogin, fetchXboxGames } = useTrophy();
 
-  // 🟢 GUARD: Prevents the "Double-Exchange" bug in development
   const exchangingRef = useRef(false);
 
-  // 🟢 HOOK: Expo handles the entire lifecycle (Key generation + Validation)
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
       clientId: CLIENT_ID,
       redirectUri: REDIRECT_URI,
       scopes: ["XboxLive.Signin", "offline_access"],
       responseType: AuthSession.ResponseType.Code,
-      usePKCE: true, // Automatically handles S256 Challenge & Verifier
+      usePKCE: true,
       extraParams: { prompt: "select_account" },
     },
     DISCOVERY
   );
 
-  const { handleXboxLogin, fetchXboxGames } = useTrophy();
-
-  const redirectUri = makeRedirectUri({ scheme: "your-scheme-here" });
-  console.log("👉 MY REDIRECT URI:", redirectUri);
-
   useEffect(() => {
     const handleExchange = async () => {
-      // 1. Validation Checks
       if (response?.type !== "success") return;
-      if (exchangingRef.current) return; // 🛑 Stop if we are already exchanging
+      if (exchangingRef.current) return;
 
       const code = response.params.code;
       const codeVerifier = request?.codeVerifier;
@@ -58,13 +52,13 @@ export function useXboxAuth() {
         return;
       }
 
-      // 2. Lock the guard
       exchangingRef.current = true;
 
       try {
-        console.log("🔄 Exchanging Code (Hook Managed)...");
+        console.log("🔄 Exchanging Xbox Code via Smart Client...");
 
-        const res = await fetch(`${PROXY_BASE_URL}/xbox/exchange`, {
+        // 🟢 Use clientFetch and standardized /api/xbox route
+        const res = await clientFetch("/api/xbox/exchange", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -77,13 +71,10 @@ export function useXboxAuth() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Exchange Failed");
 
-        console.log("✅ Xbox Connected:", data.gamertag);
-
-        // 🟢 1. Save to Context/Disk
+        // 1. Save to Context/Storage
         await handleXboxLogin(data);
 
-        // 🟢 2. Fetch Games IMMEDIATELY (Pass fresh data directly)
-        // We don't wait for state to update or user to press OK
+        // 2. Fetch Games Immediately
         fetchXboxGames({
           xuid: data.xuid,
           xsts: data.xstsToken,
@@ -92,23 +83,21 @@ export function useXboxAuth() {
 
         Alert.alert("Xbox Connected", `Logged in as ${data.gamertag}`);
       } catch (e: any) {
-        console.error("Xbox Auth Error:", e);
+        console.error("❌ Xbox Auth Error:", e);
         Alert.alert("Xbox Login Failed", e.message);
-        // Unlock on error so user can try again
         exchangingRef.current = false;
       }
     };
 
     handleExchange();
-  }, [response, request, setXboxProfile]);
+  }, [response, request, setXboxProfile, handleXboxLogin, fetchXboxGames]);
 
   const login = useCallback(() => {
     if (request) {
-      // Reset guard when user manually initiates a new login
       exchangingRef.current = false;
       promptAsync();
     }
   }, [request, promptAsync]);
-
+  console.log("👉 COPY THIS:", REDIRECT_URI);
   return { login };
 }

@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { Alert } from "react-native";
-import { handlePSNBootstrap } from "../../../api/handlePSNBootstrap";
 import { PROXY_BASE_URL } from "../../../config/endpoints";
 import { useTrophy } from "../../../providers/TrophyContext";
+import { handlePSNBootstrap } from "../../api/handlePSNBootstrap";
 
 export function usePsnAuth() {
   const { handleLoginResponse, setTrophies } = useTrophy();

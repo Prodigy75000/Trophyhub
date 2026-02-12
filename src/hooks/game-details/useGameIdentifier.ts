@@ -54,7 +54,7 @@ export function useGameIdentifier(
       };
     }
 
-    // 泙 4. CHECK USER OWNERSHIP (XBOX)
+    // 4. CHECK USER OWNERSHIP (XBOX)
     const xboxGame = xboxTitles?.find((t: any) => String(t.titleId) === cleanId);
     if (xboxGame) {
       return {
@@ -74,7 +74,7 @@ export function useGameIdentifier(
       };
     }
 
-    // 泙 5. FALLBACK (Global/Master Only)
+    // 5. FALLBACK (Global/Master Only)
     if (master) {
       // 🟢 FIX: Handle cases where trophies might be missing in DB or named differently
       const mappedTrophies = (master["trophies"] || []).map((t: any) => ({

@@ -1,9 +1,10 @@
+// src/hooks/game-details/useGameFetcher.ts
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PROXY_BASE_URL } from "../../../config/endpoints";
+// 🟢 1. Import the smart client (Adjust path if your folder structure is different)
 import { useTrophy } from "../../../providers/TrophyContext";
+import { clientFetch } from "../../api/client";
 
 export function useGameFetcher(id: string, gameObject: any) {
-  // 🟢 1. Destructure trophies from context to listen for global background updates
   const { accessToken, accountId, trophies } = useTrophy();
 
   const [localTrophies, setLocalTrophies] = useState<any[]>([]);
@@ -15,39 +16,35 @@ export function useGameFetcher(id: string, gameObject: any) {
 
   const fetchData = useCallback(
     async (isRefresh = false) => {
+      // Basic guard: If we don't have a token in Context yet, don't even try.
       if (!id || !accessToken || !accountId) return;
 
-      // 🟢 2. Only trigger skeleton state if we have literally nothing to show
       if (!isRefresh && !hasLoadedData.current) setIsInitialLoading(true);
 
       try {
-        const response = await fetch(
-          `${PROXY_BASE_URL}/api/trophies/${accountId}/${id}`,
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }
-        );
+        // 🟢 2. Use clientFetch instead of raw fetch
+        // - No PROXY_BASE_URL needed (handled by client)
+        // - No Headers needed (handled by client)
+        const response = await clientFetch(`/api/trophies/${accountId}/${id}`);
 
         if (!response.ok) throw new Error("Fetch failed");
 
         const json = await response.json();
 
         const rawTrophies = json.trophies || [];
-        // 🟢 FIXED: Match the backend key 'groups' sent by trophyController.js
         const rawGroups = json.groups || [];
 
-        // Safety check to prevent UI flickering if the API returns an empty set accidentally
+        // Safety check to prevent UI flickering
         if (rawTrophies.length === 0 && localTrophies.length > 0 && !isRefresh) {
           setIsInitialLoading(false);
           return;
         }
 
-        // 🟢 3. Mark data as loaded to enable silent background updates
         if (rawTrophies.length > 0) {
           hasLoadedData.current = true;
         }
 
-        // --- 🟢 STEP 1: NORMALIZE TROPHIES ---
+        // --- STEP 1: NORMALIZE TROPHIES ---
         const normalizedTrophies = rawTrophies.map((t: any) => ({
           ...t,
           trophyId: Number(t.trophyId),
@@ -57,21 +54,19 @@ export function useGameFetcher(id: string, gameObject: any) {
 
         setLocalTrophies(normalizedTrophies);
 
-        // --- 🟢 STEP 2: PROCESS GROUPS ---
+        // --- STEP 2: PROCESS GROUPS ---
         let processedGroups: any[] = [];
 
         if (rawGroups.length > 0) {
           processedGroups = rawGroups.map((g: any) => ({
             ...g,
             trophyGroupId: String(g.trophyGroupId),
-            // Ensure names aren't lost before useTrophyGrouper
             name: g.trophyGroupName || g.groupName || g.name,
             trophyIds: g.trophyIds ? g.trophyIds.map((tid: any) => Number(tid)) : [],
           }));
         }
 
-        // --- 🟢 STEP 3: SELF-HEALING LOGIC ---
-        // If API groups are missing/incomplete, we rebuild them from the trophy definitions
+        // --- STEP 3: SELF-HEALING LOGIC ---
         if (processedGroups.length === 0 || !processedGroups[0].trophyIds?.length) {
           const groupMap = new Map<string, any>();
 
@@ -114,13 +109,10 @@ export function useGameFetcher(id: string, gameObject: any) {
         setRefreshing(false);
       }
     },
-    // 🟢 4. CRITICAL: Add 'trophies' to dependencies to trigger re-memoization on global change
     [id, accessToken, accountId, localTrophies.length, trophies]
   );
 
   useEffect(() => {
-    // 🟢 5. Silent fetch: Pass 'true' (isRefresh) if we already have data
-    // This allows the Watchdog background update to sync the specific game screen
     fetchData(hasLoadedData.current);
   }, [fetchData]);
 
@@ -129,7 +121,6 @@ export function useGameFetcher(id: string, gameObject: any) {
     fetchData(true);
   };
 
-  // 🟢 6. EXPORT SETTERS: Required for useGameDetails to clear stale state for Skeletons
   return {
     localTrophies,
     setLocalTrophies,

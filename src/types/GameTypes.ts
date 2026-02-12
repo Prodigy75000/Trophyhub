@@ -12,7 +12,6 @@ export interface MasterGameVariant {
     silver: number;
     gold: number;
     platinum: number;
-    total: number;
   };
 }
 
@@ -31,7 +30,6 @@ export interface MasterGameEntry {
     silver: number;
     gold: number;
     platinum: number;
-    total: number;
   };
   // Dictionary structure
   platforms?: {
@@ -90,7 +88,6 @@ export interface GameVersion {
     silver: number;
     gold: number;
     platinum: number;
-    total: number;
   };
   isOwned: boolean;
 }

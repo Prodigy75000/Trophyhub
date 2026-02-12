@@ -15,6 +15,8 @@ const KEY_AVATAR_URL = "user_avatar_url";
 export function usePsnSession() {
   const [accountId, setAccountId] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  // 🟢 NEW: Store refresh token in state
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
 
   // 1. LOGOUT
@@ -33,23 +35,31 @@ export function usePsnSession() {
       console.warn("Error clearing storage", e);
     }
     setAccessToken(null);
+    setRefreshToken(null); // Clear refresh
     setAccountId(null);
     setUser(null);
+  }, []);
+
+  // 🟢 NEW: Helper for Silent Refresh
+  const updateTokensOnly = useCallback(async (newAccess: string, newRefresh: string) => {
+    console.log("💾 silently updating tokens...");
+    setAccessToken(newAccess);
+    setRefreshToken(newRefresh);
+    await AsyncStorage.setItem(KEY_ACCESS_TOKEN, newAccess);
+    await AsyncStorage.setItem(KEY_REFRESH_TOKEN, newRefresh);
   }, []);
 
   // 2. SAVE LOGIN
   const handleLoginResponse = useCallback(async (data: any) => {
     const now = Date.now();
-    // Default to 1 hour if not provided
     const expiresIn = data.expiresIn || 3600;
     const expiresAt = now + expiresIn * 1000;
 
     // Update State
     setAccessToken(data.accessToken);
+    setRefreshToken(data.refreshToken); // Set refresh
     setAccountId(data.accountId);
 
-    // Construct User Object
-    // 🟢 FIX: Remove explicit ': UserProfile' type to allow 'isPlus' property
     const newProfile = {
       onlineId: data.onlineId || "Guest",
       avatarUrl: data.avatarUrl || "https://i.imgur.com/6Cklq5z.png",
@@ -57,7 +67,6 @@ export function usePsnSession() {
       trophyLevel: data.trophyLevel || 1,
     };
 
-    // Cast to unknown first to bypass 'excess property' checks
     setUser(newProfile as unknown as UserProfile);
 
     // Persist to Storage
@@ -84,7 +93,6 @@ export function usePsnSession() {
 
     const loadSession = async () => {
       try {
-        // Read all keys safely
         const values = await AsyncStorage.multiGet([
           KEY_ACCESS_TOKEN,
           KEY_ACCOUNT_ID,
@@ -94,7 +102,6 @@ export function usePsnSession() {
           KEY_AVATAR_URL,
         ]);
 
-        // Helper to get value by key
         const getVal = (key: string) => values.find((pair) => pair[0] === key)?.[1];
 
         const token = getVal(KEY_ACCESS_TOKEN);
@@ -108,7 +115,7 @@ export function usePsnSession() {
           const now = Date.now();
           const expiresAt = expiryStr ? parseInt(expiryStr, 10) : 0;
 
-          // Check if expired (or expiring in < 5 mins)
+          // Check if expired
           if (refresh && now > expiresAt - 5 * 60 * 1000) {
             console.log("⚠️ Token Expired! Attempting Refresh...");
             try {
@@ -122,7 +129,6 @@ export function usePsnSession() {
                 const newData = await res.json();
                 console.log("✅ Session Refreshed Successfully!");
                 if (mounted) {
-                  // We pass 'id' because refresh endpoint might not return accountId
                   await handleLoginResponse({ ...newData, accountId: id });
                 }
                 return;
@@ -141,8 +147,8 @@ export function usePsnSession() {
           console.log("💾 PSN Session Valid");
           if (mounted) {
             setAccessToken(token);
+            setRefreshToken(refresh || null); // Load refresh
             setAccountId(id);
-            // 🟢 FIX: Handle potential missing props in type definition
             setUser({
               onlineId: onlineId || "Unknown",
               avatarUrl: avatarUrl || "https://i.imgur.com/6Cklq5z.png",
@@ -168,6 +174,9 @@ export function usePsnSession() {
     setAccountId,
     accessToken,
     setAccessToken,
+    refreshToken, // 🟢 EXPOSED
+    setRefreshToken, // 🟢 EXPOSED
+    updateTokensOnly, // 🟢 EXPOSED
     user,
     setUser,
     logout,

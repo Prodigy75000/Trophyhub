@@ -1,12 +1,13 @@
 // providers/TrophyContext.tsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { PROXY_BASE_URL } from "../config/endpoints"; // 🟢 Import Config
+import { PROXY_BASE_URL } from "../config/endpoints";
+import { setupApiClient } from "../src/api/client";
 import { usePsnSession } from "../src/hooks/context/usePsnSession";
 import { useTrophyData } from "../src/hooks/context/useTrophyData";
 import { useXboxLogic } from "../src/hooks/context/useXboxLogic";
 import { useTrophyWatchdog } from "../src/hooks/useTrophyWatchdog";
 import { TrophyContextType } from "../src/types/ContextTypes";
-import { MasterGameEntry } from "../src/types/GameTypes"; // 🟢 Import Type
+import { MasterGameEntry } from "../src/types/GameTypes";
 import { calculateTotalTrophies } from "../src/utils/trophyCalculations";
 
 const TrophyContext = createContext<TrophyContextType | null>(null);
@@ -16,11 +17,35 @@ export const TrophyProvider = ({ children }: { children: React.ReactNode }) => {
   const xbox = useXboxLogic();
   const data = useTrophyData(psn.accessToken, psn.accountId);
 
-  // 🟢 STATE: Hold the Master DB globally
   const [masterDatabase, setMasterDatabase] = useState<MasterGameEntry[]>([]);
   const [isMasterLoading, setIsMasterLoading] = useState(true);
 
-  // 🟢 EFFECT: Fetch Master DB once on mount
+  // 1. Define Logout FIRST so it can be used in dependencies
+  const handleLogout = React.useCallback(async () => {
+    await psn.logout();
+    await xbox.logoutXbox();
+    data.setTrophies(null);
+    xbox.setXboxTitles([]);
+    xbox.setXboxProfile(null);
+  }, [psn, xbox, data]);
+
+  // 2. Initialize API Client
+  useEffect(() => {
+    setupApiClient(
+      psn.accessToken,
+      psn.refreshToken,
+      (newAccess, newRefresh) => {
+        console.log("💾 [Context] Syncing refreshed tokens...");
+        psn.updateTokensOnly(newAccess, newRefresh);
+      },
+      () => {
+        handleLogout();
+      }
+    );
+    // 🟢 Fixed Dependencies
+  }, [psn.accessToken, psn.refreshToken, psn.updateTokensOnly, handleLogout]);
+
+  // 3. Fetch Master DB
   useEffect(() => {
     const loadMaster = async () => {
       try {
@@ -30,7 +55,6 @@ export const TrophyProvider = ({ children }: { children: React.ReactNode }) => {
       } catch (e) {
         console.warn("⚠️ Master DB fetch failed in Context:", e);
       } finally {
-        // 🟢 DONE: Whether it worked or failed, stop loading
         setIsMasterLoading(false);
       }
     };
@@ -51,14 +75,6 @@ export const TrophyProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [data.trophies, watchdog]);
 
-  const handleLogout = async () => {
-    await psn.logout();
-    await xbox.logoutXbox();
-    data.setTrophies(null);
-    xbox.setXboxTitles([]);
-    xbox.setXboxProfile(null);
-  };
-
   const value = useMemo(
     () => ({
       ...psn,
@@ -66,9 +82,10 @@ export const TrophyProvider = ({ children }: { children: React.ReactNode }) => {
       ...data,
       logout: handleLogout,
       isMasterLoading,
-      masterDatabase, // 🟢 EXPOSE IT HERE
+      masterDatabase,
     }),
-    [psn, xbox, data, masterDatabase]
+    // 🟢 Fixed Dependencies
+    [psn, xbox, data, masterDatabase, isMasterLoading, handleLogout]
   );
 
   return <TrophyContext.Provider value={value}>{children}</TrophyContext.Provider>;

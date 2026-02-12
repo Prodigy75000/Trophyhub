@@ -2,7 +2,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, FlatList, Text, TouchableOpacity, View } from "react-native";
 import {
   Gesture,
@@ -17,9 +17,6 @@ import { useTrophy } from "../providers/TrophyContext";
 
 // Custom Hooks
 import { useTrophyFilter } from "../src/hooks/useTrophyFilter";
-
-// Data
-import masterGamesRaw from "../data/master_games.json";
 
 // Components
 import HeaderActionBar, {
@@ -87,10 +84,30 @@ export default function HomeScreen() {
   });
 
   // --- 2. DATA STRATEGY (CLEANED) ---
-  // 🟢 FIX 1: Removed the old "require" logic. masterGamesRaw now has EVERYTHING.
-  // We just pass it through. The filtering happens in useTrophyFilter.
-  const masterDatabase = useMemo(() => {
-    return masterGamesRaw as unknown as any[];
+  const [masterDatabase, setMasterDatabase] = useState<any[]>([]);
+  const [isMasterLoading, setIsMasterLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMaster = async () => {
+      try {
+        // Your server is http://localhost:4000/games right now.
+        const res = await fetch(`${PROXY_BASE_URL}/games`);
+        const data = await res.json();
+        if (!cancelled) setMasterDatabase(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.warn("Master DB fetch failed", e);
+        if (!cancelled) setMasterDatabase([]);
+      } finally {
+        if (!cancelled) setIsMasterLoading(false);
+      }
+    };
+
+    loadMaster();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // --- 3. LOGIC HOOKS ---

@@ -4,6 +4,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+//endpoint
+import { PROXY_BASE_URL } from "../../config/endpoints";
+
 // Context & Providers
 import { useTrophy } from "../../providers/TrophyContext";
 
@@ -25,7 +28,6 @@ import { normalizeTrophyType } from "../../src/utils/normalizeTrophy";
 import { styles } from "../../src/styles/GameScreen.styles";
 
 // Data
-import masterGamesRaw from "../../data/master_games.json";
 
 const HEADER_HEIGHT = 60;
 const ZERO_COUNTS = { bronze: 0, silver: 0, gold: 0, platinum: 0 };
@@ -46,6 +48,31 @@ export default function GameScreen() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [selectedTrophy, setSelectedTrophy] = useState<any>(null);
 
+  const [masterDatabase, setMasterDatabase] = useState<any[]>([]);
+  const [isMasterLoading, setIsMasterLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMaster = async () => {
+      try {
+        const res = await fetch(`${PROXY_BASE_URL}/games`);
+        const data = await res.json();
+        if (!cancelled) setMasterDatabase(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.warn("Master DB fetch failed", e);
+        if (!cancelled) setMasterDatabase([]);
+      } finally {
+        if (!cancelled) setIsMasterLoading(false);
+      }
+    };
+
+    loadMaster();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // --- DATA HOOK ---
   const {
     game,
@@ -59,14 +86,14 @@ export default function GameScreen() {
 
   // 🟢 1. CONSOLIDATED MASTER ENTRY LOOKUP (Efficient)
   const masterEntry = useMemo(() => {
-    return (masterGamesRaw as any[]).find(
+    return masterDatabase.find(
       (g) =>
         g.canonicalId === gameId ||
         Object.values(g.platforms || {}).some((l: any) =>
           l.some((v: any) => v.id === gameId)
         )
     );
-  }, [gameId]);
+  }, [gameId, masterDatabase]);
 
   // 🟢 2. ROBUST ICON RESOLUTION
   // Priorities match useTrophyFilter: storesquare > Live API > square > icon

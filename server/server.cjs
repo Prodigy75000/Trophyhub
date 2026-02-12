@@ -7,6 +7,8 @@ const { Buffer } = require("buffer");
 // 🟢 NEW IMPORTS
 const { fetchPSN } = require("./psnClient");
 const trophyController = require("./trophyController");
+// Mongo db
+const { listGames } = require("../src/repositories/gamesRepo");
 
 // PSN Library Imports
 const {
@@ -20,20 +22,10 @@ dotenv.config();
 const AZURE_CLIENT_ID = "5e278654-b281-411b-85f4-eb7fb056e5ba";
 
 const app = express();
-
-// --- 🟢 DEDUPLICATED LOGGER ---
-const recentLogs = new Set();
-app.use((req, res, next) => {
-  const logKey = `${req.method} ${req.originalUrl}`;
-
-  if (!recentLogs.has(logKey)) {
-    //console.log(`🔔 SERVER HIT: ${logKey}`);
-    recentLogs.add(logKey);
-
-    // Clear the key after 2 seconds to allow future valid hits
-    setTimeout(() => recentLogs.delete(logKey), 2000);
-  }
-  next();
+// Mongo DB Route
+app.get("/api/games", async (req, res) => {
+  const games = await listGames();
+  res.json(games);
 });
 
 // Middleware
@@ -45,6 +37,10 @@ app.use(
   })
 );
 app.use(express.json());
+app.use((req, res, next) => {
+  console.log(`🔔 SERVER HIT: ${req.method} ${req.url}`);
+  next();
+});
 
 // Auth Guard
 function requireBearer(req, res, next) {
@@ -263,6 +259,11 @@ app.get(
   requireBearer,
   trophyController.getGameDetails
 );
+
+app.use((req, res) => {
+  console.log(`⚠️  404: ${req.method} ${req.url}`);
+  res.status(404).json({ error: "Not found", path: req.url });
+});
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Server running on port ${PORT}`));
